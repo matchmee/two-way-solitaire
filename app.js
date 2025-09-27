@@ -11,12 +11,12 @@ const state = {
   selected: null,
 };
 
-// Base metrics for scaling
-const BASE_CARD_H = 100;      // px
+// Base metrics
+const BASE_CARD_H = 120;      // slightly larger base to allow upscale
 const BASE_CARD_W = Math.round(BASE_CARD_H/1.47);
 const BASE_FAN    = Math.round(BASE_CARD_H*0.16);
-const MIN_SCALE   = 0.45;     // don't go too tiny
-const MAX_SCALE   = 1.0;
+const MIN_SCALE   = 0.42;
+const MAX_SCALE   = 1.5;      // allow growth to fill space
 
 function newDeck(){
   const deck=[];
@@ -52,7 +52,7 @@ function setup(){
   state.waste=[];
   deal();
   render();
-  setStatus("Auto‑fit on. Stacks will always fit the screen.");
+  setStatus("Auto‑fit tuned. No scrolling.");
   persist();
 }
 
@@ -317,12 +317,12 @@ function persist(){
       foundations: state.foundations, tableaus: state.tableaus,
       undo: state.undo
     };
-    localStorage.setItem('twosol_v32_save', JSON.stringify(save));
+    localStorage.setItem('twosol_v33_save', JSON.stringify(save));
   }catch(e){}
 }
 function restore(){
   try{
-    const s = localStorage.getItem('twosol_v32_save');
+    const s = localStorage.getItem('twosol_v33_save');
     if (!s) return false;
     const obj = JSON.parse(s);
     state.stock = obj.stock||[]; state.waste = obj.waste||[];
@@ -335,23 +335,29 @@ function restore(){
   }catch(e){ return false; }
 }
 
-/* ===== Auto-fit logic ===== */
+/* ===== Auto-fit logic (revised) ===== */
 function autoFitColumns(){
-  // find tallest tableau stack length
+  // Measure exact available height for tableau stacks: space under foundation row, above footer
+  const main = document.getElementById('mainArea');
+  const found = document.getElementById('foundRow');
+  const footer = document.getElementById('ftr');
+  const topY = found.getBoundingClientRect().bottom;
+  const bottomY = footer.getBoundingClientRect().top;
+  const avail = Math.max(120, Math.floor(bottomY - topY - 24)); // padding
+
+  // Tallest stack length
   let maxN = 0;
   for (let i=0;i<7;i++) maxN = Math.max(maxN, state.tableaus[i].length);
   if (maxN < 1) maxN = 1;
-  const main = document.getElementById('mainArea');
-  const avail = main ? main.clientHeight : (window.innerHeight - 92); // px
-  const target = Math.max(100, Math.floor(avail*0.92)); // use 92% of area
+
   const baseStack = BASE_CARD_H + BASE_FAN*(maxN-1);
-  let scale = Math.min(MAX_SCALE, target / baseStack);
-  if (!isFinite(scale) || scale<=0) scale = MAX_SCALE;
+  let scale = Math.min(MAX_SCALE, avail / baseStack);
+  if (!isFinite(scale) || scale<=0) scale = 1.0;
   if (scale < MIN_SCALE) scale = MIN_SCALE;
 
   const h = Math.round(BASE_CARD_H * scale);
   const w = Math.round(BASE_CARD_W * scale);
-  const fan = Math.max(8, Math.round(BASE_FAN * scale));
+  const fan = Math.max(6, Math.round(BASE_FAN * scale));
 
   const root = document.documentElement;
   root.style.setProperty('--card-h', h+'px');
@@ -359,7 +365,7 @@ function autoFitColumns(){
   root.style.setProperty('--fan', fan+'px');
 }
 
-window.addEventListener('resize', ()=>autoFitColumns());
+['resize','orientationchange'].forEach(ev=>window.addEventListener(ev, autoFitColumns));
 
 window.addEventListener('load', ()=>{
   qs('#newGameBtn').addEventListener('click', setup);

@@ -1,12 +1,11 @@
 :root{
-  /* Base (will be overridden by JS auto-fit) */
   --card-w: 70px;
-  --card-h: 103px; /* 1.47 ratio */
+  --card-h: 103px;
   --fan:    16px;
 }
 
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;height:100%;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b3a2e;color:#fff}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b3a2e;color:#fff}
 header,footer{padding:8px 12px;background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(6px)}
 header{display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
 h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.3px}

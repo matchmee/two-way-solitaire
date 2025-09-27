@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Two‑Way Solitaire (v3.2)</title>
+  <title>Two‑Way Solitaire (v3.3)</title>
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header>
+  <header id="hdr">
     <h1>Two‑Way Solitaire</h1>
     <div class="buttons">
       <button id="newGameBtn" title="Start a new game">New</button>
@@ -21,7 +21,7 @@
   </header>
 
   <main id="mainArea">
-    <section class="row foundations-row" aria-label="Foundations">
+    <section id="foundRow" class="row foundations-row" aria-label="Foundations">
       <div class="pile foundation" data-pile="F0" aria-label="Foundation 1"></div>
       <div class="pile foundation" data-pile="F1" aria-label="Foundation 2"></div>
       <div class="pile foundation" data-pile="F2" aria-label="Foundation 3"></div>
@@ -33,7 +33,7 @@
       </div>
     </section>
 
-    <section class="row tableaus-row" aria-label="Tableaus">
+    <section id="tabRow" class="row tableaus-row" aria-label="Tableaus">
       <div class="pile tableau" data-pile="T0" aria-label="Tableau 1"></div>
       <div class="pile tableau" data-pile="T1" aria-label="Tableau 2"></div>
       <div class="pile tableau" data-pile="T2" aria-label="Tableau 3"></div>
@@ -44,8 +44,8 @@
     </section>
   </main>
 
-  <footer>
-    <div id="status">Stacks auto‑fit to your screen. No more scrolling.</div>
+  <footer id="ftr">
+    <div id="status">Auto‑fit tuned. If anything still clips, tell me your device model.</div>
   </footer>
 
   <dialog id="helpDialog">
