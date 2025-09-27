@@ -1,7 +1,7 @@
 :root{
-  --card-w: 70px;
-  --card-h: 103px;
-  --fan:    16px;
+  --card-w: 60px;
+  --card-h: 88px;
+  --fan:    14px;
 }
 
 *{box-sizing:border-box}

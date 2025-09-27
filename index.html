@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Two‑Way Solitaire (v3.5)</title>
+  <title>Two‑Way Solitaire (v3.6)</title>
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,7 +16,7 @@
     <div class="controls">
       <label class="scale">
         <span>Size</span>
-        <input id="scaleRange" type="range" min="50" max="100" step="2" value="100">
+        <input id="scaleRange" type="range" min="60" max="120" step="2" value="100">
         <output id="scaleOut">100%</output>
       </label>
       <button id="newGameBtn" title="Start a new game">New</button>
@@ -50,7 +50,7 @@
   </main>
 
   <footer id="ftr">
-    <div id="status">Auto‑fit shrinks only. Use the Size slider (50%–100%) to go smaller.</div>
+    <div id="status">Auto‑fit fills the screen up to your Size setting (60–120%).</div>
   </footer>
 
   <dialog id="helpDialog">
@@ -61,7 +61,7 @@
       <li>Seven columns with fanned stacks and face‑down cards that flip when revealed.</li>
       <li>Tap a top face‑up card to auto‑move (Foundations preferred). If no legal auto move, it selects.</li>
       <li>Tap Stock to deal one to Waste; tap empty Stock to recycle Waste.</li>
-      <li>Size slider sets a maximum scale; auto‑fit may shrink further to keep stacks on screen.</li>
+      <li><strong>Size</strong> = maximum scale. Auto‑fit may go smaller on tall stacks, but never larger than your choice.</li>
     </ul>
     <button id="closeHelp">Close</button>
   </dialog>

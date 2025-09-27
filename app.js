@@ -9,16 +9,15 @@ const state = {
   tableaus: [[],[],[],[],[],[],[]],
   undo: [],
   selected: null,
-  // UI
-  manualScale: 1.0, // 1.0 = 100%
+  manualScale: 1.0, // 1.0 = 100% on a smaller base
 };
 
-// Base metrics (do not change across devices)
-const BASE_CARD_H = 120;
+// Rebased metrics (smaller base so 100% ≈ old 50%)
+const BASE_CARD_H = 90;
 const BASE_CARD_W = Math.round(BASE_CARD_H/1.47);
 const BASE_FAN    = Math.round(BASE_CARD_H*0.16);
-const MIN_SCALE   = 0.40;
-const MAX_SCALE   = 1.0; // v3.5: never enlarge, only shrink
+const MIN_SCALE   = 0.55; // don't get too tiny
+const MAX_SCALE   = 1.20; // internal cap; slider also caps
 
 function newDeck(){
   const deck=[];
@@ -54,7 +53,7 @@ function setup(){
   state.waste=[];
   deal();
   render();
-  setStatus("Auto‑fit shrinks only. Adjust the Size slider if you want smaller.");
+  setStatus("Auto‑fit enlarges up to your Size, or shrinks if stacks get tall.");
   persist();
 }
 
@@ -320,12 +319,12 @@ function persist(){
       undo: state.undo,
       manualScale: state.manualScale
     };
-    localStorage.setItem('twosol_v35_save', JSON.stringify(save));
+    localStorage.setItem('twosol_v36_save', JSON.stringify(save));
   }catch(e){}
 }
 function restore(){
   try{
-    const s = localStorage.getItem('twosol_v35_save');
+    const s = localStorage.getItem('twosol_v36_save');
     if (!s) return false;
     const obj = JSON.parse(s);
     state.stock = obj.stock||[]; state.waste = obj.waste||[];
@@ -343,7 +342,7 @@ function restore(){
   }catch(e){ return false; }
 }
 
-/* ===== Auto-fit logic (shrink-only + manual max) ===== */
+/* ===== Auto-fit logic (can enlarge up to slider, shrink below if needed) ===== */
 function measureAndLockMainHeight(){
   const hdr = document.getElementById('hdr');
   const ftr = document.getElementById('ftr');
@@ -364,12 +363,10 @@ function autoFitColumns(){
   for (let i=0;i<7;i++) maxN = Math.max(maxN, state.tableaus[i].length);
 
   const baseStack = BASE_CARD_H + BASE_FAN*(maxN-1);
-  let autoScale = Math.min(MAX_SCALE, avail / baseStack);
-  if (!isFinite(autoScale) || autoScale<=0) autoScale = 1.0;
-  if (autoScale < MIN_SCALE) autoScale = MIN_SCALE;
-
-  // Manual slider limits the maximum
-  const effective = Math.min(autoScale, state.manualScale);
+  let targetScale = avail / baseStack;         // how big to fill space
+  targetScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, targetScale));
+  // Respect manual slider as an upper bound
+  const effective = Math.min(targetScale, state.manualScale);
 
   const h = Math.round(BASE_CARD_H * effective);
   const w = Math.round(BASE_CARD_W * effective);
@@ -390,13 +387,12 @@ function rafAutoFit(){
   });
 }
 
-// Slider wiring
 function initSlider(){
   const slider = document.getElementById('scaleRange');
   const out = document.getElementById('scaleOut');
   if (!slider || !out) return;
   const setFromSlider = ()=>{
-    const pct = Math.max(50, Math.min(100, parseInt(slider.value,10)||100));
+    const pct = Math.max(60, Math.min(120, parseInt(slider.value,10)||100));
     state.manualScale = pct/100;
     out.textContent = pct + '%';
     persist();
@@ -404,7 +400,6 @@ function initSlider(){
   };
   slider.addEventListener('input', setFromSlider);
   slider.addEventListener('change', setFromSlider);
-  // initialize display
   slider.value = Math.round(state.manualScale*100);
   out.textContent = Math.round(state.manualScale*100) + '%';
 }
