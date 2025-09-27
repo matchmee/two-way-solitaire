@@ -11,6 +11,13 @@ const state = {
   selected: null,
 };
 
+// Base metrics for scaling
+const BASE_CARD_H = 100;      // px
+const BASE_CARD_W = Math.round(BASE_CARD_H/1.47);
+const BASE_FAN    = Math.round(BASE_CARD_H*0.16);
+const MIN_SCALE   = 0.45;     // don't go too tiny
+const MAX_SCALE   = 1.0;
+
 function newDeck(){
   const deck=[];
   for(let copy=0; copy<4; copy++){
@@ -45,7 +52,7 @@ function setup(){
   state.waste=[];
   deal();
   render();
-  setStatus("Tap Aa to shrink cards/fan if stacks exceed your screen.");
+  setStatus("Auto‑fit on. Stacks will always fit the screen.");
   persist();
 }
 
@@ -83,6 +90,8 @@ function render(){
       tEl.appendChild(el);
     });
   }
+
+  autoFitColumns();
   attachInteractions();
   checkWin();
 }
@@ -93,7 +102,7 @@ function cardEl(card, isTopUp){
     el.classList.add('facedown');
   } else {
     el.classList.add('faceup');
-    el.textContent = `${rankLabel(card.r)}♠`
+    el.textContent = `${rankLabel(card.r)}♠`;
   }
   if (isTopUp) el.classList.add('top');
   if (state.selected && state.selected.id===card.id) el.classList.add('select');
@@ -229,23 +238,6 @@ function findTopPile(cardId){
   return null;
 }
 
-function canMove(card, toPid){
-  if (toPid==='STOCK' || toPid==='WASTE') return false;
-  if (toPid.startsWith('F')){
-    const f = state.foundations[+toPid[1]];
-    if (f.length===0) return card.r===1;
-    return card.r===f[f.length-1].r+1;
-  }
-  if (toPid.startsWith('T')){
-    const t = state.tableaus[+toPid[1]];
-    const top = topFaceUpOfTableau(+toPid[1]);
-    if (!t.length) return true;
-    if (!top) return false;
-    return Math.abs(card.r - top.r)===1;
-  }
-  return false;
-}
-
 function moveCard(fromPid, toPid){
   let card=null;
   if (fromPid.startsWith('T')){
@@ -323,50 +315,57 @@ function persist(){
     const save = {
       stock: state.stock, waste: state.waste,
       foundations: state.foundations, tableaus: state.tableaus,
-      undo: state.undo,
-      size: document.body.dataset.size || 'normal',
+      undo: state.undo
     };
-    localStorage.setItem('twosol_v31_save', JSON.stringify(save));
+    localStorage.setItem('twosol_v32_save', JSON.stringify(save));
   }catch(e){}
 }
 function restore(){
   try{
-    const s = localStorage.getItem('twosol_v31_save');
+    const s = localStorage.getItem('twosol_v32_save');
     if (!s) return false;
     const obj = JSON.parse(s);
     state.stock = obj.stock||[]; state.waste = obj.waste||[];
     state.foundations = obj.foundations||[[],[],[],[]];
     state.tableaus = obj.tableaus||[[],[],[],[],[],[],[]];
     state.undo = obj.undo||[];
-    document.body.dataset.size = obj.size || 'normal';
-    applySizeClass();
     render();
     setStatus("Game restored.");
     return true;
   }catch(e){ return false; }
 }
 
-function applySizeClass(){
-  document.body.classList.remove('size-compact','size-tiny');
-  const sz = document.body.dataset.size || 'normal';
-  if (sz==='compact') document.body.classList.add('size-compact');
-  if (sz==='tiny') document.body.classList.add('size-tiny');
+/* ===== Auto-fit logic ===== */
+function autoFitColumns(){
+  // find tallest tableau stack length
+  let maxN = 0;
+  for (let i=0;i<7;i++) maxN = Math.max(maxN, state.tableaus[i].length);
+  if (maxN < 1) maxN = 1;
+  const main = document.getElementById('mainArea');
+  const avail = main ? main.clientHeight : (window.innerHeight - 92); // px
+  const target = Math.max(100, Math.floor(avail*0.92)); // use 92% of area
+  const baseStack = BASE_CARD_H + BASE_FAN*(maxN-1);
+  let scale = Math.min(MAX_SCALE, target / baseStack);
+  if (!isFinite(scale) || scale<=0) scale = MAX_SCALE;
+  if (scale < MIN_SCALE) scale = MIN_SCALE;
+
+  const h = Math.round(BASE_CARD_H * scale);
+  const w = Math.round(BASE_CARD_W * scale);
+  const fan = Math.max(8, Math.round(BASE_FAN * scale));
+
+  const root = document.documentElement;
+  root.style.setProperty('--card-h', h+'px');
+  root.style.setProperty('--card-w', w+'px');
+  root.style.setProperty('--fan', fan+'px');
 }
+
+window.addEventListener('resize', ()=>autoFitColumns());
 
 window.addEventListener('load', ()=>{
   qs('#newGameBtn').addEventListener('click', setup);
   qs('#undoBtn').addEventListener('click', undo);
   qs('#helpBtn').addEventListener('click', ()=>qs('#helpDialog').showModal());
   qs('#closeHelp').addEventListener('click', ()=>qs('#helpDialog').close());
-
-  qs('#sizeBtn').addEventListener('click', ()=>{
-    const current = document.body.dataset.size || 'normal';
-    const next = current==='normal' ? 'compact' : current==='compact' ? 'tiny' : 'normal';
-    document.body.dataset.size = next;
-    applySizeClass();
-    persist();
-    setStatus(`Size: ${next}`);
-  });
 
   if (!restore()) setup();
 

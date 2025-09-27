@@ -1,25 +1,8 @@
 :root{
-  /* Responsive sizes: choose the smaller of width- or height-based */
-  --card-w: min(9.2vw, 70px);
-  --card-h: calc(var(--card-w) * 1.47);
-  --fan:    calc(var(--card-h) * 0.16);
-}
-body.size-compact{
-  --card-w: min(7.8vw, 62px);
-  --card-h: calc(var(--card-w) * 1.47);
-  --fan:    calc(var(--card-h) * 0.135);
-}
-body.size-tiny{
-  --card-w: min(6.8vw, 56px);
-  --card-h: calc(var(--card-w) * 1.47);
-  --fan:    calc(var(--card-h) * 0.115);
-}
-
-/* Small-height screens shrink more */
-@media (max-height: 750px){
-  :root{ --fan: calc(var(--card-h)*0.13); }
-  body.size-compact{ --fan: calc(var(--card-h)*0.11); }
-  body.size-tiny{ --fan: calc(var(--card-h)*0.095); }
+  /* Base (will be overridden by JS auto-fit) */
+  --card-w: 70px;
+  --card-h: 103px; /* 1.47 ratio */
+  --fan:    16px;
 }
 
 *{box-sizing:border-box}
