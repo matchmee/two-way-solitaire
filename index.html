@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Two‑Way Solitaire (v2)</title>
+  <title>Two‑Way Solitaire (v3)</title>
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -45,18 +45,18 @@
   </main>
 
   <footer>
-    <div id="status">Tap a top card: it will auto-move to the best spot (foundations first), or select if no good move.</div>
+    <div id="status">Tap a top face‑up card to auto‑move (foundations first). Face‑down cards flip when uncovered.</div>
   </footer>
 
   <dialog id="helpDialog">
     <h2>How to Play (Two‑Way / “Flip‑Style”)</h2>
     <ul>
-      <li>Goal: move all cards to the four Foundations (A→K). <strong>Suit is ignored</strong> in this version.</li>
-      <li>On Tableaus you may build <strong>up or down</strong>. Direction can change anytime; single-card moves only.</li>
-      <li>Seven columns. Cards are fanned so you can see what’s beneath the top.</li>
-      <li>Tap a top card to <strong>auto-move</strong> it to the best destination (Foundations preferred; otherwise a legal Tableau). If nothing fits, it will just select.</li>
-      <li>Tap the Stock to deal one to Waste. When Stock is empty, tap it to recycle Waste (unlimited redeals).</li>
-      <li>Offline capable once installed to Home Screen.</li>
+      <li>Goal: move all cards to the four Foundations (A→K). <strong>Suit ignored</strong>.</li>
+      <li>Tableau: build <strong>up or down</strong> by 1; single‑card moves only.</li>
+      <li>Seven columns with <strong>fanned stacks</strong>. Hidden cards start face‑down and flip when revealed.</li>
+      <li>Tap a top face‑up card to <strong>auto‑move</strong>. If no legal auto move, it selects for manual placement.</li>
+      <li>Tap Stock to deal one to Waste; tap empty Stock to recycle Waste.</li>
+      <li>Offline capable after first load.</li>
     </ul>
     <button id="closeHelp">Close</button>
   </dialog>

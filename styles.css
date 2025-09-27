@@ -11,9 +11,11 @@ main{padding:10px;display:flex;flex-direction:column;gap:12px}
 .pile{width:72px;height:104px;border-radius:10px;border:2px dashed rgba(255,255,255,.2);display:flex;align-items:flex-end;justify-content:center;position:relative;background:rgba(255,255,255,.06);min-width:72px}
 .pile.foundation{background:linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.02))}
 .card{width:68px;height:100px;border-radius:8px;background:#fff;color:#111;position:absolute;left:2px;right:2px;bottom:2px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;box-shadow:0 2px 6px rgba(0,0,0,.35);user-select:none;touch-action:manipulation}
-.card.red{color:#c02739}
-.card.select{outline:3px solid #ffd34e;z-index:50}
-.pile.tableau .card{transform:translateY(calc(var(--offset,0)*-16px));}
+.card.faceup{z-index:var(--z,1)}
+.card.facedown{background:#1b5e4a;color:#cfe9e4;text-shadow:0 1px 0 #09382e}
+.card.facedown::after{content:"🂠";font-size:24px;opacity:.9}
+.card.select{outline:3px solid #ffd34e;z-index:999}
+.pile.tableau .card{transform:translateY(calc(var(--offset,0)*14px));}
 .pile .card:not(.top){pointer-events:none}
 .pile.empty::after{content:"";position:absolute;inset:0;border-radius:10px;border:2px dashed rgba(255,255,255,.25)}
 footer{position:sticky;bottom:0}

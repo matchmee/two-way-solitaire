@@ -1,22 +1,22 @@
 (function(){
 'use strict';
 
-const SUITS = ['♠'];
 const RANKS = [null,'A','2','3','4','5','6','7','8','9','10','J','Q','K'];
 
 const state = {
   stock: [], waste: [],
-  foundations: [[],[],[],[]],
-  tableaus: [[],[],[],[],[],[],[]],
+  foundations: [[],[],[],[]],        // suitless A→K
+  tableaus: [[],[],[],[],[],[],[]],  // each item: {r, id, face:'down'|'up'}
   undo: [],
   selected: null,
 };
 
 function newDeck(){
+  // single-suit: 4 copies of A..K => 52
   const deck=[];
   for(let copy=0; copy<4; copy++){
     for(let r=1;r<=13;r++){
-      deck.push({s:0, r, id:`${copy}-0-${r}-${Math.random().toString(36).slice(2,6)}`});
+      deck.push({r, id:`${copy}-${r}-${Math.random().toString(36).slice(2,6)}`, face:'up'});
     }
   }
   for (let i=deck.length-1;i>0;i--){
@@ -28,14 +28,15 @@ function newDeck(){
 
 function deal(){
   const deck = newDeck();
+  // Klondike-style: column i has i face-down and 1 face-up (i=0..6)
   for(let i=0;i<7;i++){
     state.tableaus[i]=[];
-    for(let k=0;k<3;k++) state.tableaus[i].push(deck.pop());
+    for(let k=0;k<i;k++){
+      const c = deck.pop(); c.face='down'; state.tableaus[i].push(c);
+    }
+    const up = deck.pop(); up.face='up'; state.tableaus[i].push(up);
   }
-  for(let i=0;i<7;i++){
-    if (i<4) state.tableaus[i].push(deck.pop());
-  }
-  state.stock = deck;
+  state.stock = deck; // remaining cards in stock, all face-up when dealt to waste
 }
 
 function setup(){
@@ -46,11 +47,10 @@ function setup(){
   state.waste=[];
   deal();
   render();
-  setStatus("New game. Tap a top card to auto-move; Stock deals to Waste.");
+  setStatus("New game. Tap a top face‑up card to auto‑move; Stock deals to Waste.");
   persist();
 }
 
-function suitSymbol(){ return '♠'; }
 function rankLabel(r){ return RANKS[r]; }
 
 function render(){
@@ -61,7 +61,7 @@ function render(){
   const stockEl = qs('[data-pile="STOCK"]');
   if (state.stock.length===0){ stockEl.classList.add('empty'); }
   else {
-    const back = ce('div','card'); back.textContent='🂠';
+    const back = ce('div','card facedown'); // show as back
     stockEl.appendChild(back);
   }
   const wasteEl = qs('[data-pile="WASTE"]');
@@ -79,8 +79,9 @@ function render(){
     const t = state.tableaus[i];
     if (t.length===0) tEl.classList.add('empty');
     t.forEach((c, idx)=>{
-      const el = cardEl(c, idx===t.length-1);
-      el.style.setProperty('--offset', (t.length-1-idx).toString());
+      const el = cardEl(c, idx===t.length-1 && c.face==='up');
+      el.style.setProperty('--offset', idx.toString());
+      el.style.setProperty('--z', idx.toString());
       tEl.appendChild(el);
     });
   }
@@ -88,11 +89,15 @@ function render(){
   checkWin();
 }
 
-function cardEl(card, isTop){
+function cardEl(card, isTopUp){
   const el = ce('div','card');
-  el.dataset.card = card.id;
-  el.classList.toggle('top', !!isTop);
-  el.textContent = `${rankLabel(card.r)}${suitSymbol()}`;
+  if (card.face==='down'){
+    el.classList.add('facedown');
+  } else {
+    el.classList.add('faceup');
+    el.textContent = `${rankLabel(card.r)}♠`;
+  }
+  if (isTopUp) el.classList.add('top');
   if (state.selected && state.selected.id===card.id) el.classList.add('select');
   return el;
 }
@@ -107,7 +112,9 @@ function onPileTap(pid){
   if (pid==='STOCK'){
     if (state.stock.length>0){
       pushUndo();
-      state.waste.push(state.stock.pop());
+      const c = state.stock.pop();
+      c.face='up';
+      state.waste.push(c);
       setStatus("Dealt 1 to Waste.");
       render(); persist();
       return;
@@ -121,26 +128,26 @@ function onPileTap(pid){
     return;
   }
 
-  const top = peekTop(pid);
-  if (!top){ setStatus("No card here."); return; }
+  const top = peekTopFaceUp(pid);
+  if (!top){ setStatus("No face‑up card here."); return; }
 
   if (tryAutoMove(top)){
     render(); persist();
     return;
   }
-
   state.selected = top;
   render();
   setStatus(`Selected ${label(top)}. Tap a destination.`);
 }
 
 function tryAutoMove(card){
-  const fromPid = findCardPile(card.id);
+  const fromPid = findTopPile(card.id);
   if (!fromPid) return false;
   const fTargets = foundationTargets(card);
   if (fTargets.length){
     pushUndo();
     moveCard(fromPid, fTargets[0]);
+    postMoveFlip(fromPid);
     setStatus(`Auto → Foundation (${fTargets[0]}).`);
     return true;
   }
@@ -148,6 +155,7 @@ function tryAutoMove(card){
   if (tTargets.length){
     pushUndo();
     moveCard(fromPid, tTargets[0]);
+    postMoveFlip(fromPid);
     setStatus(`Auto → Tableau (${tTargets[0]}).`);
     return true;
   }
@@ -170,7 +178,8 @@ function tableauTargets(card){
     const t = state.tableaus[i];
     if (t.length===0) options.push({pid:`T${i}`, score:0});
     else {
-      const top = t[t.length-1];
+      const top = topFaceUpOfTableau(i);
+      if (!top) continue;
       const diff = Math.abs(card.r - top.r);
       if (diff===1){
         options.push({pid:`T${i}`, score:100 + t.length});
@@ -181,14 +190,22 @@ function tableauTargets(card){
   return options.map(o=>o.pid).filter((pid, idx, arr)=>arr.indexOf(pid)===idx);
 }
 
-function peekTop(pid){
+function topFaceUpOfTableau(i){
+  const t = state.tableaus[i];
+  for(let k=t.length-1;k>=0;k--){
+    if (t[k].face==='up') return t[k];
+  }
+  return null;
+}
+
+function peekTopFaceUp(pid){
   if (pid.startsWith('F')){
     const i=+pid[1]; const f=state.foundations[i];
     return f[f.length-1]||null;
   }
   if (pid.startsWith('T')){
-    const i=+pid[1]; const t=state.tableaus[i];
-    return t[t.length-1]||null;
+    const i=+pid[1];
+    return topFaceUpOfTableau(i);
   }
   if (pid==='WASTE'){
     return state.waste[state.waste.length-1]||null;
@@ -196,9 +213,22 @@ function peekTop(pid){
   return null;
 }
 
-function findCardPile(cardId){
-  for(let i=0;i<7;i++){ const t=state.tableaus[i]; if (t.length && t[t.length-1].id===cardId) return `T${i}`; }
-  for(let i=0;i<4;i++){ const f=state.foundations[i]; if (f.length && f[f.length-1].id===cardId) return `F${i}`; }
+function findTopPile(cardId){
+  // only consider topmost face-up in each pile
+  for(let i=0;i<7;i++){
+    const t=state.tableaus[i];
+    if (!t.length) continue;
+    // topmost face-up is last up in array
+    for(let k=t.length-1;k>=0;k--){
+      if (t[k].face==='up'){
+        if (t[k].id===cardId) return `T${i}`;
+        break;
+      } else break; // facedown at top means none face-up
+    }
+  }
+  for(let i=0;i<4;i++){
+    const f=state.foundations[i]; if (f.length && f[f.length-1].id===cardId) return `F${i}`;
+  }
   if (state.waste.length && state.waste[state.waste.length-1].id===cardId) return 'WASTE';
   return null;
 }
@@ -212,8 +242,10 @@ function canMove(card, toPid){
   }
   if (toPid.startsWith('T')){
     const t = state.tableaus[+toPid[1]];
-    if (t.length===0) return true;
-    const top = t[t.length-1];
+    // place on topmost face-up (or empty)
+    const top = topFaceUpOfTableau(+toPid[1]);
+    if (!t.length) return true;
+    if (!top) return false;
     return Math.abs(card.r - top.r)===1;
   }
   return false;
@@ -221,16 +253,44 @@ function canMove(card, toPid){
 
 function moveCard(fromPid, toPid){
   let card=null;
-  if (fromPid.startsWith('T')) card = state.tableaus[+fromPid[1]].pop();
-  else if (fromPid.startsWith('F')) card = state.foundations[+fromPid[1]].pop();
-  else if (fromPid==='WASTE') card = state.waste.pop();
+  if (fromPid.startsWith('T')){
+    const i = +fromPid[1];
+    card = popTopFaceUpFromTableau(i);
+  } else if (fromPid.startsWith('F')){
+    card = state.foundations[+fromPid[1]].pop();
+  } else if (fromPid==='WASTE'){
+    card = state.waste.pop();
+  }
   if (!card) return;
 
   if (toPid.startsWith('T')) state.tableaus[+toPid[1]].push(card);
   else if (toPid.startsWith('F')) state.foundations[+toPid[1]].push(card);
 }
 
-function label(c){ return `${rankLabel(c.r)}${suitSymbol()}`; }
+function popTopFaceUpFromTableau(i){
+  const t = state.tableaus[i];
+  for(let k=t.length-1;k>=0;k--){
+    if (t[k].face==='up'){
+      return t.splice(k,1)[0];
+    } else break;
+  }
+  return null;
+}
+
+function postMoveFlip(fromPid){
+  // If a tableau move leaves a face-down card on top, flip it face-up
+  if (!fromPid.startsWith('T')) return;
+  const i = +fromPid[1];
+  const t = state.tableaus[i];
+  if (!t.length) return;
+  const top = t[t.length-1];
+  if (top.face==='down'){
+    top.face='up';
+    setStatus("Flipped a card.");
+  }
+}
+
+function label(c){ return `${rankLabel(c.r)}♠`; }
 
 function pushUndo(){
   const snapshot = JSON.stringify({
@@ -271,12 +331,12 @@ function persist(){
       foundations: state.foundations, tableaus: state.tableaus,
       undo: state.undo
     };
-    localStorage.setItem('twosol_v2_save', JSON.stringify(save));
+    localStorage.setItem('twosol_v3_save', JSON.stringify(save));
   }catch(e){}
 }
 function restore(){
   try{
-    const s = localStorage.getItem('twosol_v2_save');
+    const s = localStorage.getItem('twosol_v3_save');
     if (!s) return false;
     const obj = JSON.parse(s);
     state.stock = obj.stock||[]; state.waste = obj.waste||[];
