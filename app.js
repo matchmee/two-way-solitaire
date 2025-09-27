@@ -9,15 +9,14 @@ const state = {
   tableaus: [[],[],[],[],[],[],[]],
   undo: [],
   selected: null,
-  manualScale: 1.0, // 1.0 = 100% on a smaller base
+  manualScale: 1.0,
 };
 
-// Rebased metrics (smaller base so 100% ≈ old 50%)
 const BASE_CARD_H = 90;
 const BASE_CARD_W = Math.round(BASE_CARD_H/1.47);
 const BASE_FAN    = Math.round(BASE_CARD_H*0.16);
-const MIN_SCALE   = 0.55; // don't get too tiny
-const MAX_SCALE   = 1.20; // internal cap; slider also caps
+const MIN_SCALE   = 0.55;
+const MAX_SCALE   = 1.20;
 
 function newDeck(){
   const deck=[];
@@ -53,7 +52,7 @@ function setup(){
   state.waste=[];
   deal();
   render();
-  setStatus("Auto‑fit enlarges up to your Size, or shrinks if stacks get tall.");
+  setStatus("Tableau piles grow to their real height. Screen gets fully used.");
   persist();
 }
 
@@ -63,6 +62,9 @@ function render(){
   document.querySelectorAll('.pile').forEach(el=>{
     el.innerHTML='';
     el.classList.remove('empty');
+    if (el.classList.contains('tableau')){
+      el.style.height = ''; // reset; will be set below
+    }
   });
   const stockEl = qs('[data-pile="STOCK"]');
   if (state.stock.length===0){ stockEl.classList.add('empty'); }
@@ -80,6 +82,13 @@ function render(){
     if (f.length===0) fEl.classList.add('empty');
     else fEl.appendChild(cardEl(f[f.length-1], true));
   }
+
+  // Render tableaus and set true pile height
+  const cs = getComputedStyle(document.documentElement);
+  const cardH = parseFloat(cs.getPropertyValue('--card-h'))||BASE_CARD_H;
+  const fan = parseFloat(cs.getPropertyValue('--fan'))||BASE_FAN;
+  let tallestPx = cardH;
+
   for(let i=0;i<7;i++){
     const tEl = qs(`[data-pile="T${i}"]`);
     const t = state.tableaus[i];
@@ -90,7 +99,14 @@ function render(){
       el.style.setProperty('--z', idx.toString());
       tEl.appendChild(el);
     });
+    const h = Math.round(cardH + fan * Math.max(0, t.length-1));
+    tEl.style.height = h + 'px'; // <-- make the pile as tall as the stack
+    tallestPx = Math.max(tallestPx, h);
   }
+
+  // Ensure the whole row is at least tallest stack
+  const row = document.getElementById('tabRow');
+  row.style.minHeight = Math.round(tallestPx + 4) + 'px';
 
   rafAutoFit();
   attachInteractions();
@@ -319,12 +335,12 @@ function persist(){
       undo: state.undo,
       manualScale: state.manualScale
     };
-    localStorage.setItem('twosol_v36_save', JSON.stringify(save));
+    localStorage.setItem('twosol_v37_save', JSON.stringify(save));
   }catch(e){}
 }
 function restore(){
   try{
-    const s = localStorage.getItem('twosol_v36_save');
+    const s = localStorage.getItem('twosol_v37_save');
     if (!s) return false;
     const obj = JSON.parse(s);
     state.stock = obj.stock||[]; state.waste = obj.waste||[];
@@ -342,7 +358,7 @@ function restore(){
   }catch(e){ return false; }
 }
 
-/* ===== Auto-fit logic (can enlarge up to slider, shrink below if needed) ===== */
+/* ===== Auto-fit logic ===== */
 function measureAndLockMainHeight(){
   const hdr = document.getElementById('hdr');
   const ftr = document.getElementById('ftr');
@@ -363,9 +379,8 @@ function autoFitColumns(){
   for (let i=0;i<7;i++) maxN = Math.max(maxN, state.tableaus[i].length);
 
   const baseStack = BASE_CARD_H + BASE_FAN*(maxN-1);
-  let targetScale = avail / baseStack;         // how big to fill space
+  let targetScale = avail / baseStack;
   targetScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, targetScale));
-  // Respect manual slider as an upper bound
   const effective = Math.min(targetScale, state.manualScale);
 
   const h = Math.round(BASE_CARD_H * effective);
@@ -383,7 +398,11 @@ function rafAutoFit(){
   if (rafId) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(()=>{
     measureAndLockMainHeight();
-    requestAnimationFrame(autoFitColumns);
+    requestAnimationFrame(()=>{
+      autoFitColumns();
+      // After scale changes, recompute pile heights quickly
+      requestAnimationFrame(()=>render()); // re-render to set new pile heights
+    });
   });
 }
 

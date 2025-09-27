@@ -18,6 +18,7 @@ main{padding:10px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
 .row{display:flex;gap:10px;align-items:flex-start;justify-content:center;flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px}
 .spacer{flex:1}
 .stock-area{display:flex;gap:10px}
+/* Base pile size (overridden for tableau via JS for real height) */
 .pile{width:var(--card-w);height:var(--card-h);border-radius:10px;border:2px dashed rgba(255,255,255,.2);display:flex;align-items:flex-end;justify-content:center;position:relative;background:rgba(255,255,255,.06);min-width:var(--card-w)}
 .pile.foundation{background:linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.02))}
 .card{width:calc(var(--card-w) - 4px);height:calc(var(--card-h) - 4px);border-radius:8px;background:#fff;color:#111;position:absolute;left:2px;right:2px;bottom:2px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:calc(var(--card-w)*0.28);box-shadow:0 2px 6px rgba(0,0,0,.35);user-select:none;touch-action:manipulation}
