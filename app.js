@@ -9,14 +9,16 @@ const state = {
   tableaus: [[],[],[],[],[],[],[]],
   undo: [],
   selected: null,
+  // UI
+  manualScale: 1.0, // 1.0 = 100%
 };
 
-// Base metrics
+// Base metrics (do not change across devices)
 const BASE_CARD_H = 120;
 const BASE_CARD_W = Math.round(BASE_CARD_H/1.47);
 const BASE_FAN    = Math.round(BASE_CARD_H*0.16);
 const MIN_SCALE   = 0.40;
-const MAX_SCALE   = 1.6;
+const MAX_SCALE   = 1.0; // v3.5: never enlarge, only shrink
 
 function newDeck(){
   const deck=[];
@@ -52,7 +54,7 @@ function setup(){
   state.waste=[];
   deal();
   render();
-  setStatus("Auto‑fit uses visualViewport. No scrolling.");
+  setStatus("Auto‑fit shrinks only. Adjust the Size slider if you want smaller.");
   persist();
 }
 
@@ -315,56 +317,63 @@ function persist(){
     const save = {
       stock: state.stock, waste: state.waste,
       foundations: state.foundations, tableaus: state.tableaus,
-      undo: state.undo
+      undo: state.undo,
+      manualScale: state.manualScale
     };
-    localStorage.setItem('twosol_v34_save', JSON.stringify(save));
+    localStorage.setItem('twosol_v35_save', JSON.stringify(save));
   }catch(e){}
 }
 function restore(){
   try{
-    const s = localStorage.getItem('twosol_v34_save');
+    const s = localStorage.getItem('twosol_v35_save');
     if (!s) return false;
     const obj = JSON.parse(s);
     state.stock = obj.stock||[]; state.waste = obj.waste||[];
     state.foundations = obj.foundations||[[],[],[],[]];
     state.tableaus = obj.tableaus||[[],[],[],[],[],[],[]];
     state.undo = obj.undo||[];
+    state.manualScale = obj.manualScale || 1.0;
+    const slider = document.getElementById('scaleRange');
+    const out = document.getElementById('scaleOut');
+    if (slider){ slider.value = Math.round(state.manualScale*100); }
+    if (out){ out.textContent = Math.round(state.manualScale*100) + '%'; }
     render();
     setStatus("Game restored.");
     return true;
   }catch(e){ return false; }
 }
 
-/* ===== Auto-fit logic (visualViewport-based) ===== */
+/* ===== Auto-fit logic (shrink-only + manual max) ===== */
 function measureAndLockMainHeight(){
   const hdr = document.getElementById('hdr');
   const ftr = document.getElementById('ftr');
   const main = document.getElementById('mainArea');
   const vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
-  const h = Math.max(120, Math.floor(vh - hdr.offsetHeight - ftr.offsetHeight - 12)); // 12px padding
+  const h = Math.max(120, Math.floor(vh - hdr.offsetHeight - ftr.offsetHeight - 12));
   main.style.height = h + 'px';
   return h;
 }
 
 function autoFitColumns(){
-  const mainH = measureAndLockMainHeight();
   const found = document.getElementById('foundRow');
-  const tab = document.getElementById('tabRow');
+  const footerTop = document.getElementById('ftr').getBoundingClientRect().top;
   const topY = found.getBoundingClientRect().bottom;
-  const bottomY = document.getElementById('ftr').getBoundingClientRect().top;
-  const avail = Math.max(120, Math.floor(bottomY - topY - 16));
+  const avail = Math.max(120, Math.floor(footerTop - topY - 16));
 
   let maxN = 1;
   for (let i=0;i<7;i++) maxN = Math.max(maxN, state.tableaus[i].length);
 
   const baseStack = BASE_CARD_H + BASE_FAN*(maxN-1);
-  let scale = Math.min(MAX_SCALE, avail / baseStack);
-  if (!isFinite(scale) || scale<=0) scale = 1.0;
-  if (scale < MIN_SCALE) scale = MIN_SCALE;
+  let autoScale = Math.min(MAX_SCALE, avail / baseStack);
+  if (!isFinite(autoScale) || autoScale<=0) autoScale = 1.0;
+  if (autoScale < MIN_SCALE) autoScale = MIN_SCALE;
 
-  const h = Math.round(BASE_CARD_H * scale);
-  const w = Math.round(BASE_CARD_W * scale);
-  const fan = Math.max(6, Math.round(BASE_FAN * scale));
+  // Manual slider limits the maximum
+  const effective = Math.min(autoScale, state.manualScale);
+
+  const h = Math.round(BASE_CARD_H * effective);
+  const w = Math.round(BASE_CARD_W * effective);
+  const fan = Math.max(6, Math.round(BASE_FAN * effective));
 
   const root = document.documentElement;
   root.style.setProperty('--card-h', h+'px');
@@ -381,6 +390,25 @@ function rafAutoFit(){
   });
 }
 
+// Slider wiring
+function initSlider(){
+  const slider = document.getElementById('scaleRange');
+  const out = document.getElementById('scaleOut');
+  if (!slider || !out) return;
+  const setFromSlider = ()=>{
+    const pct = Math.max(50, Math.min(100, parseInt(slider.value,10)||100));
+    state.manualScale = pct/100;
+    out.textContent = pct + '%';
+    persist();
+    rafAutoFit();
+  };
+  slider.addEventListener('input', setFromSlider);
+  slider.addEventListener('change', setFromSlider);
+  // initialize display
+  slider.value = Math.round(state.manualScale*100);
+  out.textContent = Math.round(state.manualScale*100) + '%';
+}
+
 ['resize','orientationchange'].forEach(ev=>window.addEventListener(ev, rafAutoFit));
 
 window.addEventListener('load', ()=>{
@@ -390,6 +418,8 @@ window.addEventListener('load', ()=>{
   qs('#closeHelp').addEventListener('click', ()=>qs('#helpDialog').close());
 
   if (!restore()) setup();
+  initSlider();
+  rafAutoFit();
 
   if ('serviceWorker' in navigator){
     navigator.serviceWorker.register('./service-worker.js');
