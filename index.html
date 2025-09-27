@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Two‑Way Solitaire (v3.7)</title>
+  <title>Two‑Way Solitaire (v3.8)</title>
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -18,6 +18,10 @@
         <span>Size</span>
         <input id="scaleRange" type="range" min="60" max="120" step="2" value="100">
         <output id="scaleOut">100%</output>
+      </label>
+      <label class="fitwrap">
+        <input id="fitToggle" type="checkbox" checked>
+        <span>Fit</span>
       </label>
       <button id="newGameBtn" title="Start a new game">New</button>
       <button id="undoBtn" title="Undo last move">Undo</button>
@@ -34,7 +38,7 @@
       <div class="spacer"></div>
       <div class="stock-area">
         <div class="pile stock" data-pile="STOCK" aria-label="Stock"></div>
-        <div class="pile waste" data-pile="WASTE" aria-label="Waste"></div>
+        <div class="pile waste" data-pile="WASTE"></div>
       </div>
     </section>
 
@@ -50,20 +54,8 @@
   </main>
 
   <footer id="ftr">
-    <div id="status">Tableau piles now expand to their real height. Full vertical use, no clipping.</div>
+    <div id="status">Fit = tallest stack fills screen; turn off to use slider cap (60–120%).</div>
   </footer>
-
-  <dialog id="helpDialog">
-    <h2>How to Play (Two‑Way / “Flip‑Style”)</h2>
-    <ul>
-      <li>Goal: move all cards to the four Foundations (A→K). <strong>Suit ignored</strong>.</li>
-      <li>Tableau: build <strong>up or down</strong> by 1; single‑card moves only.</li>
-      <li>Seven columns with fanned stacks and face‑down cards that flip when revealed.</li>
-      <li>Tap a top face‑up card to auto‑move (Foundations preferred). If no legal auto move, it selects.</li>
-      <li>Tap Stock to deal one to Waste; tap empty Stock to recycle Waste.</li>
-    </ul>
-    <button id="closeHelp">Close</button>
-  </dialog>
 
   <script src="app.js"></script>
 </body>

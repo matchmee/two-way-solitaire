@@ -10,6 +10,7 @@ const state = {
   undo: [],
   selected: null,
   manualScale: 1.0,
+  fitMode: true,
 };
 
 const BASE_CARD_H = 90;
@@ -52,7 +53,7 @@ function setup(){
   state.waste=[];
   deal();
   render();
-  setStatus("Tableau piles grow to their real height. Screen gets fully used.");
+  setStatus("Fit is ON: tallest stack fills the screen. Turn off to use slider cap.");
   persist();
 }
 
@@ -63,15 +64,13 @@ function render(){
     el.innerHTML='';
     el.classList.remove('empty');
     if (el.classList.contains('tableau')){
-      el.style.height = ''; // reset; will be set below
+      el.style.height = ''; // reset; set below
     }
   });
   const stockEl = qs('[data-pile="STOCK"]');
   if (state.stock.length===0){ stockEl.classList.add('empty'); }
-  else {
-    const back = ce('div','card facedown');
-    stockEl.appendChild(back);
-  }
+  else stockEl.appendChild(ce('div','card facedown'));
+
   const wasteEl = qs('[data-pile="WASTE"]');
   if (state.waste.length===0) wasteEl.classList.add('empty');
   else wasteEl.appendChild(cardEl(state.waste[state.waste.length-1], true));
@@ -79,11 +78,10 @@ function render(){
   for(let i=0;i<4;i++){
     const fEl = qs(`[data-pile="F${i}"]`);
     const f = state.foundations[i];
-    if (f.length===0) fEl.classList.add('empty');
+    if (!f.length) fEl.classList.add('empty');
     else fEl.appendChild(cardEl(f[f.length-1], true));
   }
 
-  // Render tableaus and set true pile height
   const cs = getComputedStyle(document.documentElement);
   const cardH = parseFloat(cs.getPropertyValue('--card-h'))||BASE_CARD_H;
   const fan = parseFloat(cs.getPropertyValue('--fan'))||BASE_FAN;
@@ -92,7 +90,7 @@ function render(){
   for(let i=0;i<7;i++){
     const tEl = qs(`[data-pile="T${i}"]`);
     const t = state.tableaus[i];
-    if (t.length===0) tEl.classList.add('empty');
+    if (!t.length) tEl.classList.add('empty');
     t.forEach((c, idx)=>{
       const el = cardEl(c, idx===t.length-1 && c.face==='up');
       el.style.setProperty('--offset', idx.toString());
@@ -100,13 +98,13 @@ function render(){
       tEl.appendChild(el);
     });
     const h = Math.round(cardH + fan * Math.max(0, t.length-1));
-    tEl.style.height = h + 'px'; // <-- make the pile as tall as the stack
+    tEl.style.height = h + 'px';
     tallestPx = Math.max(tallestPx, h);
   }
 
-  // Ensure the whole row is at least tallest stack
+  // Make the row consume the available space so there is no giant gap
   const row = document.getElementById('tabRow');
-  row.style.minHeight = Math.round(tallestPx + 4) + 'px';
+  row.style.minHeight = Math.round(tallestPx + 2) + 'px';
 
   rafAutoFit();
   attachInteractions();
@@ -115,39 +113,28 @@ function render(){
 
 function cardEl(card, isTopUp){
   const el = ce('div','card');
-  if (card.face==='down'){
-    el.classList.add('facedown');
-  } else {
-    el.classList.add('faceup');
-    el.textContent = `${rankLabel(card.r)}♠`;
-  }
+  if (card.face==='down') el.classList.add('facedown');
+  else { el.classList.add('faceup'); el.textContent = `${rankLabel(card.r)}♠`; }
   if (isTopUp) el.classList.add('top');
   if (state.selected && state.selected.id===card.id) el.classList.add('select');
   return el;
 }
 
 function attachInteractions(){
-  qsAll('.pile').forEach(el=>{
-    el.onclick = ()=>onPileTap(el.dataset.pile);
-  });
+  qsAll('.pile').forEach(el=>el.onclick = ()=>onPileTap(el.dataset.pile));
 }
 
 function onPileTap(pid){
   if (pid==='STOCK'){
-    if (state.stock.length>0){
+    if (state.stock.length){
       pushUndo();
-      const c = state.stock.pop();
-      c.face='up';
-      state.waste.push(c);
+      const c = state.stock.pop(); c.face='up'; state.waste.push(c);
       setStatus("Dealt 1 to Waste.");
-      render(); persist();
-      return;
-    } else if (state.waste.length>0){
-      pushUndo();
-      while(state.waste.length) state.stock.push(state.waste.pop());
+      render(); persist(); return;
+    } else if (state.waste.length){
+      pushUndo(); while(state.waste.length) state.stock.push(state.waste.pop());
       setStatus("Recycled Waste back to Stock.");
-      render(); persist();
-      return;
+      render(); persist(); return;
     }
     return;
   }
@@ -155,171 +142,82 @@ function onPileTap(pid){
   const top = peekTopFaceUp(pid);
   if (!top){ setStatus("No face‑up card here."); return; }
 
-  if (tryAutoMove(top)){
-    render(); persist();
-    return;
-  }
-  state.selected = top;
-  render();
+  if (tryAutoMove(top)){ render(); persist(); return; }
+  state.selected = top; render();
   setStatus(`Selected ${label(top)}. Tap a destination.`);
 }
 
 function tryAutoMove(card){
-  const fromPid = findTopPile(card.id);
-  if (!fromPid) return false;
+  const fromPid = findTopPile(card.id); if (!fromPid) return false;
   const fTargets = foundationTargets(card);
-  if (fTargets.length){
-    pushUndo();
-    moveCard(fromPid, fTargets[0]);
-    postMoveFlip(fromPid);
-    setStatus(`Auto → Foundation (${fTargets[0]}).`);
-    return true;
-  }
+  if (fTargets.length){ pushUndo(); moveCard(fromPid, fTargets[0]); postMoveFlip(fromPid); setStatus(`Auto → Foundation (${fTargets[0]}).`); return true; }
   const tTargets = tableauTargets(card);
-  if (tTargets.length){
-    pushUndo();
-    moveCard(fromPid, tTargets[0]);
-    postMoveFlip(fromPid);
-    setStatus(`Auto → Tableau (${tTargets[0]}).`);
-    return true;
-  }
+  if (tTargets.length){ pushUndo(); moveCard(fromPid, tTargets[0]); postMoveFlip(fromPid); setStatus(`Auto → Tableau (${tTargets[0]}).`); return true; }
   return false;
 }
 
 function foundationTargets(card){
-  const out=[];
-  for(let i=0;i<4;i++){
-    const f = state.foundations[i];
-    if (f.length===0 && card.r===1) out.push(`F${i}`);
+  const out=[]; for(let i=0;i<4;i++){ const f=state.foundations[i];
+    if (!f.length && card.r===1) out.push(`F${i}`);
     else if (f.length && card.r===f[f.length-1].r+1) out.push(`F${i}`);
-  }
-  return out;
+  } return out;
 }
 
 function tableauTargets(card){
-  const options=[];
-  for(let i=0;i<7;i++){
-    const t = state.tableaus[i];
-    if (t.length===0) options.push({pid:`T${i}`, score:0});
-    else {
-      const top = topFaceUpOfTableau(i);
-      if (!top) continue;
-      const diff = Math.abs(card.r - top.r);
-      if (diff===1){
-        options.push({pid:`T${i}`, score:100 + t.length});
-      }
+  const options=[]; for(let i=0;i<7;i++){ const t=state.tableaus[i];
+    if (!t.length) options.push({pid:`T${i}`,score:0});
+    else { const top = topFaceUpOfTableau(i); if (!top) continue;
+      const diff = Math.abs(card.r - top.r); if (diff===1) options.push({pid:`T${i}`,score:100+t.length});
     }
-  }
-  options.sort((a,b)=>b.score-a.score);
-  return options.map(o=>o.pid).filter((pid, idx, arr)=>arr.indexOf(pid)===idx);
+  } options.sort((a,b)=>b.score-a.score);
+  return options.map(o=>o.pid).filter((pid,i,a)=>a.indexOf(pid)===i);
 }
 
-function topFaceUpOfTableau(i){
-  const t = state.tableaus[i];
-  for(let k=t.length-1;k>=0;k--){
-    if (t[k].face==='up') return t[k];
-  }
-  return null;
-}
+function topFaceUpOfTableau(i){ const t=state.tableaus[i]; for(let k=t.length-1;k>=0;k--){ if (t[k].face==='up') return t[k]; } return null; }
 
 function peekTopFaceUp(pid){
-  if (pid.startsWith('F')){
-    const i=+pid[1]; const f=state.foundations[i];
-    return f[f.length-1]||null;
-  }
-  if (pid.startsWith('T')){
-    const i=+pid[1];
-    return topFaceUpOfTableau(i);
-  }
-  if (pid==='WASTE'){
-    return state.waste[state.waste.length-1]||null;
-  }
+  if (pid.startsWith('F')){ const f=state.foundations[+pid[1]]; return f[f.length-1]||null; }
+  if (pid.startsWith('T')){ return topFaceUpOfTableau(+pid[1]); }
+  if (pid==='WASTE'){ return state.waste[state.waste.length-1]||null; }
   return null;
 }
 
 function findTopPile(cardId){
-  for(let i=0;i<7;i++){
-    const t=state.tableaus[i];
-    if (!t.length) continue;
-    for(let k=t.length-1;k>=0;k--){
-      if (t[k].face==='up'){
-        if (t[k].id===cardId) return `T${i}`;
-        break;
-      } else break;
-    }
-  }
-  for(let i=0;i<4;i++){
-    const f=state.foundations[i]; if (f.length && f[f.length-1].id===cardId) return `F${i}`;
-  }
+  for(let i=0;i<7;i++){ const t=state.tableaus[i]; if (!t.length) continue;
+    for(let k=t.length-1;k>=0;k--){ if (t[k].face==='up'){ if (t[k].id===cardId) return `T${i}`; break; } else break; } }
+  for(let i=0;i<4;i++){ const f=state.foundations[i]; if (f.length && f[f.length-1].id===cardId) return `F${i}`; }
   if (state.waste.length && state.waste[state.waste.length-1].id===cardId) return 'WASTE';
   return null;
 }
 
 function moveCard(fromPid, toPid){
   let card=null;
-  if (fromPid.startsWith('T')){
-    const i = +fromPid[1];
-    card = popTopFaceUpFromTableau(i);
-  } else if (fromPid.startsWith('F')){
-    card = state.foundations[+fromPid[1]].pop();
-  } else if (fromPid==='WASTE'){
-    card = state.waste.pop();
-  }
+  if (fromPid.startsWith('T')){ card = popTopFaceUpFromTableau(+fromPid[1]); }
+  else if (fromPid.startsWith('F')){ card = state.foundations[+fromPid[1]].pop(); }
+  else if (fromPid==='WASTE'){ card = state.waste.pop(); }
   if (!card) return;
-
   if (toPid.startsWith('T')) state.tableaus[+toPid[1]].push(card);
   else if (toPid.startsWith('F')) state.foundations[+toPid[1]].push(card);
 }
 
 function popTopFaceUpFromTableau(i){
-  const t = state.tableaus[i];
-  for(let k=t.length-1;k>=0;k--){
-    if (t[k].face==='up'){
-      return t.splice(k,1)[0];
-    } else break;
-  }
+  const t=state.tableaus[i];
+  for(let k=t.length-1;k>=0;k--){ if (t[k].face==='up') return t.splice(k,1)[0]; else break; }
   return null;
 }
 
 function postMoveFlip(fromPid){
   if (!fromPid.startsWith('T')) return;
-  const i = +fromPid[1];
-  const t = state.tableaus[i];
-  if (!t.length) return;
-  const top = t[t.length-1];
-  if (top.face==='down'){
-    top.face='up';
-    setStatus("Flipped a card.");
-  }
+  const t=state.tableaus[+fromPid[1]]; if (!t.length) return;
+  const top=t[t.length-1]; if (top.face==='down'){ top.face='up'; setStatus("Flipped a card."); }
 }
 
-function label(c){ return `${rankLabel(c.r)}♠`; }
+function label(c){ return `${RANKS[c.r]}♠`; }
 
-function pushUndo(){
-  const snapshot = JSON.stringify({
-    stock: state.stock, waste: state.waste,
-    foundations: state.foundations, tableaus: state.tableaus
-  });
-  state.undo.push(snapshot);
-  if (state.undo.length>200) state.undo.shift();
-}
-function undo(){
-  const snap = state.undo.pop();
-  if (!snap){ setStatus("Nothing to undo."); return; }
-  const obj = JSON.parse(snap);
-  state.stock = obj.stock;
-  state.waste = obj.waste;
-  state.foundations = obj.foundations;
-  state.tableaus = obj.tableaus;
-  state.selected = null;
-  render(); persist();
-  setStatus("Undid last move.");
-}
+function pushUndo(){ const snap=JSON.stringify({stock:state.stock,waste:state.waste,foundations:state.foundations,tableaus:state.tableaus}); state.undo.push(snap); if (state.undo.length>200) state.undo.shift(); }
+function undo(){ const s=state.undo.pop(); if(!s){setStatus("Nothing to undo.");return;} Object.assign(state, JSON.parse(`{"x":0}`)); const o=JSON.parse(s); state.stock=o.stock; state.waste=o.waste; state.foundations=o.foundations; state.tableaus=o.tableaus; state.selected=null; render(); persist(); setStatus("Undid last move."); }
 
-function checkWin(){
-  const total = state.foundations.reduce((a,f)=>a+f.length,0);
-  if (total===52) setStatus("You win! 🎉");
-}
+function checkWin(){ const total=state.foundations.reduce((a,f)=>a+f.length,0); if (total===52) setStatus("You win! 🎉"); }
 
 function setStatus(msg){ qs('#status').textContent = msg; }
 
@@ -328,60 +226,42 @@ function qsAll(s){ return document.querySelectorAll(s); }
 function ce(tag, cls){ const el=document.createElement(tag); if (cls) el.className=cls; return el; }
 
 function persist(){
-  try{
-    const save = {
-      stock: state.stock, waste: state.waste,
-      foundations: state.foundations, tableaus: state.tableaus,
-      undo: state.undo,
-      manualScale: state.manualScale
-    };
-    localStorage.setItem('twosol_v37_save', JSON.stringify(save));
-  }catch(e){}
+  try{ localStorage.setItem('twosol_v38_prefs', JSON.stringify({manualScale:state.manualScale, fitMode:state.fitMode})); }catch(e){}
 }
-function restore(){
-  try{
-    const s = localStorage.getItem('twosol_v37_save');
-    if (!s) return false;
-    const obj = JSON.parse(s);
-    state.stock = obj.stock||[]; state.waste = obj.waste||[];
-    state.foundations = obj.foundations||[[],[],[],[]];
-    state.tableaus = obj.tableaus||[[],[],[],[],[],[],[]];
-    state.undo = obj.undo||[];
-    state.manualScale = obj.manualScale || 1.0;
-    const slider = document.getElementById('scaleRange');
-    const out = document.getElementById('scaleOut');
-    if (slider){ slider.value = Math.round(state.manualScale*100); }
-    if (out){ out.textContent = Math.round(state.manualScale*100) + '%'; }
-    render();
-    setStatus("Game restored.");
-    return true;
-  }catch(e){ return false; }
+function restorePrefs(){
+  try{ const s=localStorage.getItem('twosol_v38_prefs'); if(!s) return; const p=JSON.parse(s); state.manualScale=p.manualScale??1.0; state.fitMode = p.fitMode??true; }catch(e){}
 }
 
-/* ===== Auto-fit logic ===== */
-function measureAndLockMainHeight(){
+/* ===== Layout & Fit ===== */
+function lockMainHeight(){
   const hdr = document.getElementById('hdr');
   const ftr = document.getElementById('ftr');
   const main = document.getElementById('mainArea');
   const vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
-  const h = Math.max(120, Math.floor(vh - hdr.offsetHeight - ftr.offsetHeight - 12));
+  const h = Math.max(120, Math.floor(vh - hdr.offsetHeight - ftr.offsetHeight - 8));
   main.style.height = h + 'px';
   return h;
 }
 
-function autoFitColumns(){
+function autoFit(){
+  const main = document.getElementById('mainArea');
   const found = document.getElementById('foundRow');
-  const footerTop = document.getElementById('ftr').getBoundingClientRect().top;
-  const topY = found.getBoundingClientRect().bottom;
-  const avail = Math.max(120, Math.floor(footerTop - topY - 16));
+  const row = document.getElementById('tabRow');
+
+  const mainH = main.clientHeight;
+  const avail = Math.max(120, mainH - found.offsetHeight - 8);
 
   let maxN = 1;
   for (let i=0;i<7;i++) maxN = Math.max(maxN, state.tableaus[i].length);
 
   const baseStack = BASE_CARD_H + BASE_FAN*(maxN-1);
-  let targetScale = avail / baseStack;
-  targetScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, targetScale));
-  const effective = Math.min(targetScale, state.manualScale);
+  let target = avail / baseStack;  // exact fill
+  target = Math.max(MIN_SCALE, Math.min(MAX_SCALE, target));
+
+  let effective = target;
+  if (!state.fitMode){
+    effective = Math.min(target, state.manualScale);
+  }
 
   const h = Math.round(BASE_CARD_H * effective);
   const w = Math.round(BASE_CARD_W * effective);
@@ -391,53 +271,40 @@ function autoFitColumns(){
   root.style.setProperty('--card-h', h+'px');
   root.style.setProperty('--card-w', w+'px');
   root.style.setProperty('--fan', fan+'px');
+
+  // Also set the row min-height to exactly fill the remainder
+  const stackPx = h + fan * Math.max(0, maxN-1);
+  row.style.minHeight = Math.round(stackPx+2) + 'px';
 }
 
 let rafId=null;
-function rafAutoFit(){
+function scheduleFit(){
   if (rafId) cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(()=>{
-    measureAndLockMainHeight();
-    requestAnimationFrame(()=>{
-      autoFitColumns();
-      // After scale changes, recompute pile heights quickly
-      requestAnimationFrame(()=>render()); // re-render to set new pile heights
-    });
+    lockMainHeight();
+    requestAnimationFrame(autoFit);
   });
 }
 
-function initSlider(){
+function initControls(){
   const slider = document.getElementById('scaleRange');
   const out = document.getElementById('scaleOut');
-  if (!slider || !out) return;
-  const setFromSlider = ()=>{
-    const pct = Math.max(60, Math.min(120, parseInt(slider.value,10)||100));
-    state.manualScale = pct/100;
-    out.textContent = pct + '%';
-    persist();
-    rafAutoFit();
-  };
-  slider.addEventListener('input', setFromSlider);
-  slider.addEventListener('change', setFromSlider);
-  slider.value = Math.round(state.manualScale*100);
-  out.textContent = Math.round(state.manualScale*100) + '%';
+  const fit = document.getElementById('fitToggle');
+  if (slider){ slider.value = Math.round(state.manualScale*100); slider.oninput = slider.onchange = ()=>{ state.manualScale = Math.max(0.6, Math.min(1.2, (parseInt(slider.value,10)||100)/100)); out.textContent = Math.round(state.manualScale*100)+'%'; persist(); scheduleFit(); }; out.textContent = Math.round(state.manualScale*100)+'%'; }
+  if (fit){ fit.checked = !!state.fitMode; fit.onchange = ()=>{ state.fitMode = fit.checked; persist(); scheduleFit(); }; }
 }
 
-['resize','orientationchange'].forEach(ev=>window.addEventListener(ev, rafAutoFit));
+['resize','orientationchange'].forEach(ev=>window.addEventListener(ev, scheduleFit));
 
 window.addEventListener('load', ()=>{
-  qs('#newGameBtn').addEventListener('click', setup);
+  restorePrefs();
+  initControls();
+  qs('#newGameBtn').addEventListener('click', ()=>{ setup(); });
   qs('#undoBtn').addEventListener('click', undo);
-  qs('#helpBtn').addEventListener('click', ()=>qs('#helpDialog').showModal());
-  qs('#closeHelp').addEventListener('click', ()=>qs('#helpDialog').close());
+  qs('#helpBtn').addEventListener('click', ()=>alert('Tap a face‑up card to auto‑move; build up or down by 1; Stock deals to Waste; recycle Waste onto empty Stock.'));
 
-  if (!restore()) setup();
-  initSlider();
-  rafAutoFit();
-
-  if ('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./service-worker.js');
-  }
+  setup(); // creates a new game on first load
+  if ('serviceWorker' in navigator){ navigator.serviceWorker.register('./service-worker.js'); }
 });
 
 })();
