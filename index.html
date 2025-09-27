@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Two‑Way Solitaire (v3.9)</title>
+  <title>Two‑Way Solitaire (v4.1)</title>
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,11 +16,11 @@
     <div class="controls">
       <label class="scale">
         <span>Size</span>
-        <input id="scaleRange" type="range" min="60" max="120" step="2" value="100">
+        <input id="scaleRange" type="range" min="60" max="120" step="2" value="100" aria-label="Card size">
         <output id="scaleOut">100%</output>
       </label>
       <label class="fitwrap">
-        <input id="fitToggle" type="checkbox" checked>
+        <input id="fitToggle" type="checkbox" checked aria-label="Fit tallest stack vertically">
         <span>Fit</span>
       </label>
       <button id="newGameBtn" title="Start a new game">New</button>
@@ -54,7 +54,7 @@
   </main>
 
   <footer id="ftr">
-    <div id="status">Fit uses full height. Tap any face‑up card to move a multi‑card run.</div>
+    <div id="status">Fit ON = vertical fit. Tap top card to auto‑move; tap any lower face‑up to select a run.</div>
   </footer>
 
   <script src="app.js"></script>
