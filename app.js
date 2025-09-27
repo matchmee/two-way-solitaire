@@ -5,14 +5,13 @@ const RANKS = [null,'A','2','3','4','5','6','7','8','9','10','J','Q','K'];
 
 const state = {
   stock: [], waste: [],
-  foundations: [[],[],[],[]],        // suitless A→K
-  tableaus: [[],[],[],[],[],[],[]],  // each item: {r, id, face:'down'|'up'}
+  foundations: [[],[],[],[]],
+  tableaus: [[],[],[],[],[],[],[]],
   undo: [],
   selected: null,
 };
 
 function newDeck(){
-  // single-suit: 4 copies of A..K => 52
   const deck=[];
   for(let copy=0; copy<4; copy++){
     for(let r=1;r<=13;r++){
@@ -28,7 +27,6 @@ function newDeck(){
 
 function deal(){
   const deck = newDeck();
-  // Klondike-style: column i has i face-down and 1 face-up (i=0..6)
   for(let i=0;i<7;i++){
     state.tableaus[i]=[];
     for(let k=0;k<i;k++){
@@ -36,7 +34,7 @@ function deal(){
     }
     const up = deck.pop(); up.face='up'; state.tableaus[i].push(up);
   }
-  state.stock = deck; // remaining cards in stock, all face-up when dealt to waste
+  state.stock = deck;
 }
 
 function setup(){
@@ -47,7 +45,7 @@ function setup(){
   state.waste=[];
   deal();
   render();
-  setStatus("New game. Tap a top face‑up card to auto‑move; Stock deals to Waste.");
+  setStatus("Tap Aa to shrink cards/fan if stacks exceed your screen.");
   persist();
 }
 
@@ -61,7 +59,7 @@ function render(){
   const stockEl = qs('[data-pile="STOCK"]');
   if (state.stock.length===0){ stockEl.classList.add('empty'); }
   else {
-    const back = ce('div','card facedown'); // show as back
+    const back = ce('div','card facedown');
     stockEl.appendChild(back);
   }
   const wasteEl = qs('[data-pile="WASTE"]');
@@ -95,7 +93,7 @@ function cardEl(card, isTopUp){
     el.classList.add('facedown');
   } else {
     el.classList.add('faceup');
-    el.textContent = `${rankLabel(card.r)}♠`;
+    el.textContent = `${rankLabel(card.r)}♠`
   }
   if (isTopUp) el.classList.add('top');
   if (state.selected && state.selected.id===card.id) el.classList.add('select');
@@ -214,16 +212,14 @@ function peekTopFaceUp(pid){
 }
 
 function findTopPile(cardId){
-  // only consider topmost face-up in each pile
   for(let i=0;i<7;i++){
     const t=state.tableaus[i];
     if (!t.length) continue;
-    // topmost face-up is last up in array
     for(let k=t.length-1;k>=0;k--){
       if (t[k].face==='up'){
         if (t[k].id===cardId) return `T${i}`;
         break;
-      } else break; // facedown at top means none face-up
+      } else break;
     }
   }
   for(let i=0;i<4;i++){
@@ -242,7 +238,6 @@ function canMove(card, toPid){
   }
   if (toPid.startsWith('T')){
     const t = state.tableaus[+toPid[1]];
-    // place on topmost face-up (or empty)
     const top = topFaceUpOfTableau(+toPid[1]);
     if (!t.length) return true;
     if (!top) return false;
@@ -278,7 +273,6 @@ function popTopFaceUpFromTableau(i){
 }
 
 function postMoveFlip(fromPid){
-  // If a tableau move leaves a face-down card on top, flip it face-up
   if (!fromPid.startsWith('T')) return;
   const i = +fromPid[1];
   const t = state.tableaus[i];
@@ -329,24 +323,34 @@ function persist(){
     const save = {
       stock: state.stock, waste: state.waste,
       foundations: state.foundations, tableaus: state.tableaus,
-      undo: state.undo
+      undo: state.undo,
+      size: document.body.dataset.size || 'normal',
     };
-    localStorage.setItem('twosol_v3_save', JSON.stringify(save));
+    localStorage.setItem('twosol_v31_save', JSON.stringify(save));
   }catch(e){}
 }
 function restore(){
   try{
-    const s = localStorage.getItem('twosol_v3_save');
+    const s = localStorage.getItem('twosol_v31_save');
     if (!s) return false;
     const obj = JSON.parse(s);
     state.stock = obj.stock||[]; state.waste = obj.waste||[];
     state.foundations = obj.foundations||[[],[],[],[]];
     state.tableaus = obj.tableaus||[[],[],[],[],[],[],[]];
     state.undo = obj.undo||[];
+    document.body.dataset.size = obj.size || 'normal';
+    applySizeClass();
     render();
     setStatus("Game restored.");
     return true;
   }catch(e){ return false; }
+}
+
+function applySizeClass(){
+  document.body.classList.remove('size-compact','size-tiny');
+  const sz = document.body.dataset.size || 'normal';
+  if (sz==='compact') document.body.classList.add('size-compact');
+  if (sz==='tiny') document.body.classList.add('size-tiny');
 }
 
 window.addEventListener('load', ()=>{
@@ -354,6 +358,15 @@ window.addEventListener('load', ()=>{
   qs('#undoBtn').addEventListener('click', undo);
   qs('#helpBtn').addEventListener('click', ()=>qs('#helpDialog').showModal());
   qs('#closeHelp').addEventListener('click', ()=>qs('#helpDialog').close());
+
+  qs('#sizeBtn').addEventListener('click', ()=>{
+    const current = document.body.dataset.size || 'normal';
+    const next = current==='normal' ? 'compact' : current==='compact' ? 'tiny' : 'normal';
+    document.body.dataset.size = next;
+    applySizeClass();
+    persist();
+    setStatus(`Size: ${next}`);
+  });
 
   if (!restore()) setup();
 
