@@ -1,19 +1,19 @@
 *{box-sizing:border-box}html,body{margin:0;padding:0;height:100%;font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b3a2e;color:#fff}
 header,footer{padding:8px 12px;background:rgba(0,0,0,.25);backdrop-filter:saturate(120%) blur(6px)}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
 h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.3px}
 .buttons button{appearance:none;border:0;border-radius:10px;padding:8px 12px;background:#1e8c68;color:#fff;font-weight:600}
 .buttons button:active{transform:scale(.98)}
 main{padding:10px;display:flex;flex-direction:column;gap:12px}
-.row{display:flex;gap:12px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+.row{display:flex;gap:10px;align-items:flex-start;justify-content:center;flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px}
 .spacer{flex:1}
-.stock-area{display:flex;gap:12px}
-.pile{width:72px;height:104px;border-radius:10px;border:2px dashed rgba(255,255,255,.2);display:flex;align-items:flex-end;justify-content:center;position:relative;background:rgba(255,255,255,.06)}
+.stock-area{display:flex;gap:10px}
+.pile{width:72px;height:104px;border-radius:10px;border:2px dashed rgba(255,255,255,.2);display:flex;align-items:flex-end;justify-content:center;position:relative;background:rgba(255,255,255,.06);min-width:72px}
 .pile.foundation{background:linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.02))}
 .card{width:68px;height:100px;border-radius:8px;background:#fff;color:#111;position:absolute;left:2px;right:2px;bottom:2px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;box-shadow:0 2px 6px rgba(0,0,0,.35);user-select:none;touch-action:manipulation}
 .card.red{color:#c02739}
 .card.select{outline:3px solid #ffd34e;z-index:50}
-.pile.tableau .card{transform:translateY(calc(var(--offset,0)*-16px))}
+.pile.tableau .card{transform:translateY(calc(var(--offset,0)*-16px));}
 .pile .card:not(.top){pointer-events:none}
 .pile.empty::after{content:"";position:absolute;inset:0;border-radius:10px;border:2px dashed rgba(255,255,255,.25)}
 footer{position:sticky;bottom:0}

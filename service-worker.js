@@ -1,4 +1,4 @@
-const CACHE_NAME = 'two-way-solitaire-v1';
+const CACHE_NAME = 'two-way-solitaire-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -20,16 +20,11 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  if (ASSETS.includes(url.pathname.replace(/.*\//,'.')) || ASSETS.includes('.'+url.pathname)){
-    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
-  } else {
-    e.respondWith(
-      caches.match(e.request).then(r => r || fetch(e.request).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE_NAME).then(c => c.put(e.request, copy));
-        return res;
-      }).catch(()=>r))
-    );
-  }
+  e.respondWith(
+    caches.match(e.request).then(r => r || fetch(e.request).then(res => {
+      const copy = res.clone();
+      caches.open(CACHE_NAME).then(c => c.put(e.request, copy));
+      return res;
+    }).catch(()=>r))
+  );
 });
