@@ -11,7 +11,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;po
 h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.3px}
 .buttons button{appearance:none;border:0;border-radius:10px;padding:8px 12px;background:#1e8c68;color:#fff;font-weight:600}
 .buttons button:active{transform:scale(.98)}
-main{padding:10px;display:flex;flex-direction:column;gap:12px;height:calc(100vh - 92px);overflow:hidden}
+main{padding:10px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
 .row{display:flex;gap:10px;align-items:flex-start;justify-content:center;flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px}
 .spacer{flex:1}
 .stock-area{display:flex;gap:10px}

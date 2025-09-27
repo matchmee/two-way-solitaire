@@ -12,11 +12,11 @@ const state = {
 };
 
 // Base metrics
-const BASE_CARD_H = 120;      // slightly larger base to allow upscale
+const BASE_CARD_H = 120;
 const BASE_CARD_W = Math.round(BASE_CARD_H/1.47);
 const BASE_FAN    = Math.round(BASE_CARD_H*0.16);
-const MIN_SCALE   = 0.42;
-const MAX_SCALE   = 1.5;      // allow growth to fill space
+const MIN_SCALE   = 0.40;
+const MAX_SCALE   = 1.6;
 
 function newDeck(){
   const deck=[];
@@ -52,7 +52,7 @@ function setup(){
   state.waste=[];
   deal();
   render();
-  setStatus("Auto‑fit tuned. No scrolling.");
+  setStatus("Auto‑fit uses visualViewport. No scrolling.");
   persist();
 }
 
@@ -91,7 +91,7 @@ function render(){
     });
   }
 
-  autoFitColumns();
+  rafAutoFit();
   attachInteractions();
   checkWin();
 }
@@ -317,12 +317,12 @@ function persist(){
       foundations: state.foundations, tableaus: state.tableaus,
       undo: state.undo
     };
-    localStorage.setItem('twosol_v33_save', JSON.stringify(save));
+    localStorage.setItem('twosol_v34_save', JSON.stringify(save));
   }catch(e){}
 }
 function restore(){
   try{
-    const s = localStorage.getItem('twosol_v33_save');
+    const s = localStorage.getItem('twosol_v34_save');
     if (!s) return false;
     const obj = JSON.parse(s);
     state.stock = obj.stock||[]; state.waste = obj.waste||[];
@@ -335,20 +335,27 @@ function restore(){
   }catch(e){ return false; }
 }
 
-/* ===== Auto-fit logic (revised) ===== */
-function autoFitColumns(){
-  // Measure exact available height for tableau stacks: space under foundation row, above footer
+/* ===== Auto-fit logic (visualViewport-based) ===== */
+function measureAndLockMainHeight(){
+  const hdr = document.getElementById('hdr');
+  const ftr = document.getElementById('ftr');
   const main = document.getElementById('mainArea');
-  const found = document.getElementById('foundRow');
-  const footer = document.getElementById('ftr');
-  const topY = found.getBoundingClientRect().bottom;
-  const bottomY = footer.getBoundingClientRect().top;
-  const avail = Math.max(120, Math.floor(bottomY - topY - 24)); // padding
+  const vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+  const h = Math.max(120, Math.floor(vh - hdr.offsetHeight - ftr.offsetHeight - 12)); // 12px padding
+  main.style.height = h + 'px';
+  return h;
+}
 
-  // Tallest stack length
-  let maxN = 0;
+function autoFitColumns(){
+  const mainH = measureAndLockMainHeight();
+  const found = document.getElementById('foundRow');
+  const tab = document.getElementById('tabRow');
+  const topY = found.getBoundingClientRect().bottom;
+  const bottomY = document.getElementById('ftr').getBoundingClientRect().top;
+  const avail = Math.max(120, Math.floor(bottomY - topY - 16));
+
+  let maxN = 1;
   for (let i=0;i<7;i++) maxN = Math.max(maxN, state.tableaus[i].length);
-  if (maxN < 1) maxN = 1;
 
   const baseStack = BASE_CARD_H + BASE_FAN*(maxN-1);
   let scale = Math.min(MAX_SCALE, avail / baseStack);
@@ -365,7 +372,16 @@ function autoFitColumns(){
   root.style.setProperty('--fan', fan+'px');
 }
 
-['resize','orientationchange'].forEach(ev=>window.addEventListener(ev, autoFitColumns));
+let rafId=null;
+function rafAutoFit(){
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(()=>{
+    measureAndLockMainHeight();
+    requestAnimationFrame(autoFitColumns);
+  });
+}
+
+['resize','orientationchange'].forEach(ev=>window.addEventListener(ev, rafAutoFit));
 
 window.addEventListener('load', ()=>{
   qs('#newGameBtn').addEventListener('click', setup);
