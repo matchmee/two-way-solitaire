@@ -8,7 +8,7 @@ const state = {
   foundations: [[],[],[],[]],
   tableaus: [[],[],[],[],[],[],[]],
   undo: [],
-  selected: null,
+  select: null, // {pile:'T3', index: n} start of run (face-up)
   manualScale: 1.0,
   fitMode: true,
 };
@@ -19,6 +19,7 @@ const BASE_FAN    = Math.round(BASE_CARD_H*0.16);
 const MIN_SCALE   = 0.55;
 const MAX_SCALE   = 1.20;
 
+/* ---------- Game setup ---------- */
 function newDeck(){
   const deck=[];
   for(let copy=0; copy<4; copy++){
@@ -45,46 +46,64 @@ function deal(){
   state.stock = deck;
 }
 
-function setup(){
-  state.undo.length=0;
-  state.selected=null;
-  for(let i=0;i<4;i++) state.foundations[i]=[];
-  for(let i=0;i<7;i++) state.tableaus[i]=[];
-  state.waste=[];
-  deal();
-  render();
-  setStatus("Fit is ON: tallest stack fills the screen. Turn off to use slider cap.");
-  persist();
+/* ---------- Fit calculation FIRST ---------- */
+function computeTargetScale(){
+  const main = document.getElementById('mainArea');
+  const found = document.getElementById('foundRow');
+
+  // ensure main is height-locked
+  lockMainHeight();
+  const mainH = main.clientHeight;
+  const avail = Math.max(120, mainH - found.offsetHeight - 8);
+
+  let maxN = 1;
+  for (let i=0;i<7;i++) maxN = Math.max(maxN, state.tableaus[i].length);
+
+  const baseStack = BASE_CARD_H + BASE_FAN*(maxN-1);
+  let target = avail / baseStack; // exact fill
+  target = Math.max(MIN_SCALE, Math.min(MAX_SCALE, target));
+
+  if (!state.fitMode) target = Math.min(target, state.manualScale);
+
+  return target;
 }
 
-function rankLabel(r){ return RANKS[r]; }
+function applyScale(scale){
+  const h = Math.round(BASE_CARD_H * scale);
+  const w = Math.round(BASE_CARD_W * scale);
+  const fan = Math.max(6, Math.round(BASE_FAN * scale));
+  const root = document.documentElement;
+  root.style.setProperty('--card-h', h+'px');
+  root.style.setProperty('--card-w', w+'px');
+  root.style.setProperty('--fan', fan+'px');
+}
 
+/* ---------- Render ---------- */
 function render(){
-  document.querySelectorAll('.pile').forEach(el=>{
-    el.innerHTML='';
-    el.classList.remove('empty');
-    if (el.classList.contains('tableau')){
-      el.style.height = ''; // reset; set below
-    }
-  });
+  // 1) compute & apply scale first
+  const s = computeTargetScale();
+  applyScale(s);
+
+  // 2) clear piles
+  document.querySelectorAll('.pile').forEach(el=>{ el.innerHTML=''; el.classList.remove('empty'); });
+
+  // 3) foundations/stock/waste
   const stockEl = qs('[data-pile="STOCK"]');
-  if (state.stock.length===0){ stockEl.classList.add('empty'); }
+  if (state.stock.length===0) stockEl.classList.add('empty');
   else stockEl.appendChild(ce('div','card facedown'));
-
   const wasteEl = qs('[data-pile="WASTE"]');
-  if (state.waste.length===0) wasteEl.classList.add('empty');
-  else wasteEl.appendChild(cardEl(state.waste[state.waste.length-1], true));
-
+  if (!state.waste.length) wasteEl.classList.add('empty');
+  else wasteEl.appendChild(cardEl(state.waste.at(-1), {top:true}));
   for(let i=0;i<4;i++){
     const fEl = qs(`[data-pile="F${i}"]`);
     const f = state.foundations[i];
-    if (!f.length) fEl.classList.add('empty');
-    else fEl.appendChild(cardEl(f[f.length-1], true));
+    if (!f.length) fEl.classList.add('empty'); else fEl.appendChild(cardEl(f.at(-1), {top:true}));
   }
 
+  // 4) tableaus (with real heights)
   const cs = getComputedStyle(document.documentElement);
-  const cardH = parseFloat(cs.getPropertyValue('--card-h'))||BASE_CARD_H;
-  const fan = parseFloat(cs.getPropertyValue('--fan'))||BASE_FAN;
+  const cardH = parseFloat(cs.getPropertyValue('--card-h'));
+  const fan = parseFloat(cs.getPropertyValue('--fan'));
   let tallestPx = cardH;
 
   for(let i=0;i<7;i++){
@@ -92,7 +111,8 @@ function render(){
     const t = state.tableaus[i];
     if (!t.length) tEl.classList.add('empty');
     t.forEach((c, idx)=>{
-      const el = cardEl(c, idx===t.length-1 && c.face==='up');
+      const isTopUp = idx===t.length-1 && c.face==='up';
+      const el = cardEl(c, {top:isTopUp, pile:`T${i}`, index:idx, face:c.face});
       el.style.setProperty('--offset', idx.toString());
       el.style.setProperty('--z', idx.toString());
       tEl.appendChild(el);
@@ -101,138 +121,239 @@ function render(){
     tEl.style.height = h + 'px';
     tallestPx = Math.max(tallestPx, h);
   }
-
-  // Make the row consume the available space so there is no giant gap
   const row = document.getElementById('tabRow');
   row.style.minHeight = Math.round(tallestPx + 2) + 'px';
 
-  rafAutoFit();
+  // 5) interactions
   attachInteractions();
   checkWin();
 }
 
-function cardEl(card, isTopUp){
+function cardEl(card, {top=false, pile=null, index=null, face='up'}={}){
   const el = ce('div','card');
-  if (card.face==='down') el.classList.add('facedown');
-  else { el.classList.add('faceup'); el.textContent = `${rankLabel(card.r)}♠`; }
-  if (isTopUp) el.classList.add('top');
-  if (state.selected && state.selected.id===card.id) el.classList.add('select');
+  if (face==='down'){ el.classList.add('facedown'); }
+  else { el.classList.add('faceup'); el.textContent = `${RANKS[card.r]}♠`; }
+  if (top) el.classList.add('top');
+  el.dataset.id = card.id;
+  if (pile!==null) { el.dataset.pile = pile; el.dataset.index = index; }
+  if (state.select && state.select.pile && state.select.id===card.id) el.classList.add('select');
   return el;
 }
 
 function attachInteractions(){
-  qsAll('.pile').forEach(el=>el.onclick = ()=>onPileTap(el.dataset.pile));
+  // pile taps
+  qsAll('.pile').forEach(el=>{
+    el.onclick = (ev)=>{
+      const pid = el.dataset.pile;
+      onPileTap(pid, ev);
+    };
+  });
+  // card taps (for selecting run starts)
+  qsAll('.card.faceup').forEach(el=>{
+    const pid = el.dataset.pile;
+    const idx = parseInt(el.dataset.index,10);
+    if (pid && !isNaN(idx)){
+      el.onclick = (e)=>{ e.stopPropagation(); onCardTap(pid, idx); };
+    }
+  });
 }
 
-function onPileTap(pid){
+function onCardTap(pid, idx){
+  if (!pid.startsWith('T')) return; // run selection only within tableau
+  const i = +pid[1];
+  const t = state.tableaus[i];
+  // can only start on a face-up card
+  if (t[idx].face!=='up'){ setStatus("That card is face‑down."); return; }
+  state.select = {pile:pid, index:idx, id:t[idx].id};
+  setStatus("Selected a run. Tap a destination tableau.");
+  render();
+}
+
+function onPileTap(pid, ev){
   if (pid==='STOCK'){
     if (state.stock.length){
       pushUndo();
       const c = state.stock.pop(); c.face='up'; state.waste.push(c);
-      setStatus("Dealt 1 to Waste.");
-      render(); persist(); return;
+      setStatus("Dealt 1 to Waste."); render(); persist(); return;
     } else if (state.waste.length){
       pushUndo(); while(state.waste.length) state.stock.push(state.waste.pop());
-      setStatus("Recycled Waste back to Stock.");
-      render(); persist(); return;
+      setStatus("Recycled Waste back to Stock."); render(); persist(); return;
     }
     return;
   }
+  if (pid==='WASTE'){
+    const c = state.waste.at(-1);
+    if (!c){ setStatus("Waste is empty."); return; }
+    // prefer auto move
+    if (tryAutoMoveSingle('WASTE', c)){ render(); persist(); return; }
+    state.select = {pile:'WASTE', index:state.waste.length-1, id:c.id};
+    setStatus("Selected top Waste card."); render(); return;
+  }
 
+  // Move from selection if present
+  if (state.select){
+    if (pid.startsWith('T')){
+      if (tryMoveSelectionToTableau(pid)){ render(); persist(); return; }
+      setStatus("That move isn’t legal.");
+      return;
+    } else if (pid.startsWith('F')){
+      if (tryMoveSelectionToFoundation(pid)){ render(); persist(); return; }
+      setStatus("Only single cards can go to Foundations in-order.");
+      return;
+    }
+  }
+
+  // otherwise: try auto move of top face-up
   const top = peekTopFaceUp(pid);
   if (!top){ setStatus("No face‑up card here."); return; }
-
-  if (tryAutoMove(top)){ render(); persist(); return; }
-  state.selected = top; render();
-  setStatus(`Selected ${label(top)}. Tap a destination.`);
+  if (tryAutoMoveSingle(pid, top)){ render(); persist(); return; }
+  setStatus("No auto‑move available. Tap a face‑up card to select a run.");
 }
 
-function tryAutoMove(card){
-  const fromPid = findTopPile(card.id); if (!fromPid) return false;
-  const fTargets = foundationTargets(card);
-  if (fTargets.length){ pushUndo(); moveCard(fromPid, fTargets[0]); postMoveFlip(fromPid); setStatus(`Auto → Foundation (${fTargets[0]}).`); return true; }
-  const tTargets = tableauTargets(card);
-  if (tTargets.length){ pushUndo(); moveCard(fromPid, tTargets[0]); postMoveFlip(fromPid); setStatus(`Auto → Tableau (${tTargets[0]}).`); return true; }
+function tryAutoMoveSingle(fromPid, card){
+  // prefer Foundations
+  const f = foundationTargets(card);
+  if (f.length){ pushUndo(); moveOne(fromPid, f[0]); postMoveFlip(fromPid); setStatus(`Auto → Foundation (${f[0]}).`); return true; }
+  const t = tableauTargetsSingle(card);
+  if (t.length){ pushUndo(); moveOne(fromPid, t[0]); postMoveFlip(fromPid); setStatus(`Auto → Tableau (${t[0]}).`); return true; }
   return false;
 }
 
+/* ---------- Run move rules ---------- */
+function tryMoveSelectionToTableau(destPid){
+  const sel = state.select; if (!sel) return false;
+  const run = getSelectedRun(sel);
+  if (!run.cards.length) return false;
+  const ok = canPlaceRunOnTableau(run.cards[0], destPid);
+  if (!ok) return false;
+  pushUndo();
+  removeSelectedRun(sel);
+  placeRunOnTableau(run.cards, destPid);
+  postMoveFlip(sel.pile);
+  state.select = null;
+  setStatus(`Moved ${run.cards.length} cards → ${destPid}.`);
+  return true;
+}
+
+function tryMoveSelectionToFoundation(destPid){
+  const sel = state.select; if (!sel) return false;
+  const run = getSelectedRun(sel);
+  if (run.cards.length!==1) return false; // only single card to foundation
+  const c = run.cards[0];
+  const ok = foundationTargets(c).includes(destPid);
+  if (!ok) return false;
+  pushUndo();
+  removeSelectedRun(sel);
+  state.foundations[+destPid[1]].push(c);
+  postMoveFlip(sel.pile);
+  state.select = null;
+  setStatus(`Moved ${label(c)} → ${destPid}.`);
+  return true;
+}
+
+function getSelectedRun(sel){
+  if (sel.pile==='WASTE' || sel.pile.startsWith('F')){
+    const c = sel.pile==='WASTE' ? state.waste.at(-1) : state.foundations[+sel.pile[1]].at(-1);
+    return {cards: c ? [c] : []};
+  }
+  const i = +sel.pile[1];
+  const t = state.tableaus[i];
+  const cards = t.slice(sel.index).filter(c=>c.face==='up');
+  return {cards};
+}
+
+function removeSelectedRun(sel){
+  if (sel.pile.startsWith('T')){
+    const i = +sel.pile[1];
+    state.tableaus[i] = state.tableaus[i].slice(0, sel.index);
+  } else if (sel.pile==='WASTE'){
+    state.waste.pop();
+  } else if (sel.pile.startsWith('F')){
+    state.foundations[+sel.pile[1]].pop();
+  }
+}
+
+function placeRunOnTableau(cards, pid){
+  state.tableaus[+pid[1]].push(...cards);
+}
+
+function canPlaceRunOnTableau(firstCard, destPid){
+  const t = state.tableaus[+destPid[1]];
+  if (!t.length) return true; // any run may go to empty column
+  // must be +/- 1 relative to top face-up of dest
+  let top=null;
+  for (let k=t.length-1;k>=0;k--){ if (t[k].face==='up'){ top=t[k]; break; } else break; }
+  if (!top) return true;
+  return Math.abs(firstCard.r - top.r)===1;
+}
+
+/* ---------- Single card placement helpers ---------- */
 function foundationTargets(card){
-  const out=[]; for(let i=0;i<4;i++){ const f=state.foundations[i];
+  const out=[];
+  for(let i=0;i<4;i++){
+    const f = state.foundations[i];
     if (!f.length && card.r===1) out.push(`F${i}`);
-    else if (f.length && card.r===f[f.length-1].r+1) out.push(`F${i}`);
-  } return out;
+    else if (f.length && card.r===f.at(-1).r+1) out.push(`F${i}`);
+  }
+  return out;
 }
-
-function tableauTargets(card){
-  const options=[]; for(let i=0;i<7;i++){ const t=state.tableaus[i];
-    if (!t.length) options.push({pid:`T${i}`,score:0});
-    else { const top = topFaceUpOfTableau(i); if (!top) continue;
-      const diff = Math.abs(card.r - top.r); if (diff===1) options.push({pid:`T${i}`,score:100+t.length});
+function tableauTargetsSingle(card){
+  const options=[];
+  for(let i=0;i<7;i++){
+    const t = state.tableaus[i];
+    if (!t.length) options.push(`T${i}`);
+    else {
+      let top=null;
+      for (let k=t.length-1;k>=0;k--){ if (t[k].face==='up'){ top=t[k]; break; } else break; }
+      if (!top) options.push(`T${i}`);
+      else if (Math.abs(card.r - top.r)===1) options.push(`T${i}`);
     }
-  } options.sort((a,b)=>b.score-a.score);
-  return options.map(o=>o.pid).filter((pid,i,a)=>a.indexOf(pid)===i);
+  }
+  return options;
 }
 
-function topFaceUpOfTableau(i){ const t=state.tableaus[i]; for(let k=t.length-1;k>=0;k--){ if (t[k].face==='up') return t[k]; } return null; }
-
-function peekTopFaceUp(pid){
-  if (pid.startsWith('F')){ const f=state.foundations[+pid[1]]; return f[f.length-1]||null; }
-  if (pid.startsWith('T')){ return topFaceUpOfTableau(+pid[1]); }
-  if (pid==='WASTE'){ return state.waste[state.waste.length-1]||null; }
-  return null;
-}
-
-function findTopPile(cardId){
-  for(let i=0;i<7;i++){ const t=state.tableaus[i]; if (!t.length) continue;
-    for(let k=t.length-1;k>=0;k--){ if (t[k].face==='up'){ if (t[k].id===cardId) return `T${i}`; break; } else break; } }
-  for(let i=0;i<4;i++){ const f=state.foundations[i]; if (f.length && f[f.length-1].id===cardId) return `F${i}`; }
-  if (state.waste.length && state.waste[state.waste.length-1].id===cardId) return 'WASTE';
-  return null;
-}
-
-function moveCard(fromPid, toPid){
+function moveOne(fromPid, toPid){
   let card=null;
-  if (fromPid.startsWith('T')){ card = popTopFaceUpFromTableau(+fromPid[1]); }
+  if (fromPid.startsWith('T')){
+    const i=+fromPid[1];
+    for (let k=state.tableaus[i].length-1;k>=0;k--){
+      if (state.tableaus[i][k].face==='up'){ card = state.tableaus[i].splice(k,1)[0]; break; }
+      else break;
+    }
+  } else if (fromPid==='WASTE'){ card = state.waste.pop(); }
   else if (fromPid.startsWith('F')){ card = state.foundations[+fromPid[1]].pop(); }
-  else if (fromPid==='WASTE'){ card = state.waste.pop(); }
   if (!card) return;
   if (toPid.startsWith('T')) state.tableaus[+toPid[1]].push(card);
   else if (toPid.startsWith('F')) state.foundations[+toPid[1]].push(card);
 }
 
-function popTopFaceUpFromTableau(i){
-  const t=state.tableaus[i];
-  for(let k=t.length-1;k>=0;k--){ if (t[k].face==='up') return t.splice(k,1)[0]; else break; }
-  return null;
-}
-
 function postMoveFlip(fromPid){
-  if (!fromPid.startsWith('T')) return;
-  const t=state.tableaus[+fromPid[1]]; if (!t.length) return;
-  const top=t[t.length-1]; if (top.face==='down'){ top.face='up'; setStatus("Flipped a card."); }
+  if (!fromPid || !fromPid.startsWith('T')) return;
+  const i = +fromPid[1];
+  const t = state.tableaus[i];
+  if (!t.length) return;
+  const top = t.at(-1);
+  if (top.face==='down'){ top.face='up'; }
 }
 
 function label(c){ return `${RANKS[c.r]}♠`; }
 
-function pushUndo(){ const snap=JSON.stringify({stock:state.stock,waste:state.waste,foundations:state.foundations,tableaus:state.tableaus}); state.undo.push(snap); if (state.undo.length>200) state.undo.shift(); }
-function undo(){ const s=state.undo.pop(); if(!s){setStatus("Nothing to undo.");return;} Object.assign(state, JSON.parse(`{"x":0}`)); const o=JSON.parse(s); state.stock=o.stock; state.waste=o.waste; state.foundations=o.foundations; state.tableaus=o.tableaus; state.selected=null; render(); persist(); setStatus("Undid last move."); }
-
-function checkWin(){ const total=state.foundations.reduce((a,f)=>a+f.length,0); if (total===52) setStatus("You win! 🎉"); }
-
-function setStatus(msg){ qs('#status').textContent = msg; }
-
-function qs(s){ return document.querySelector(s); }
-function qsAll(s){ return document.querySelectorAll(s); }
-function ce(tag, cls){ const el=document.createElement(tag); if (cls) el.className=cls; return el; }
-
-function persist(){
-  try{ localStorage.setItem('twosol_v38_prefs', JSON.stringify({manualScale:state.manualScale, fitMode:state.fitMode})); }catch(e){}
+/* ---------- Undo / Save ---------- */
+function pushUndo(){
+  const snap = JSON.stringify({stock:state.stock, waste:state.waste, foundations:state.foundations, tableaus:state.tableaus});
+  state.undo.push(snap); if (state.undo.length>200) state.undo.shift();
 }
-function restorePrefs(){
-  try{ const s=localStorage.getItem('twosol_v38_prefs'); if(!s) return; const p=JSON.parse(s); state.manualScale=p.manualScale??1.0; state.fitMode = p.fitMode??true; }catch(e){}
+function undo(){
+  const s=state.undo.pop(); if(!s){ setStatus("Nothing to undo."); return; }
+  const o=JSON.parse(s);
+  state.stock=o.stock; state.waste=o.waste; state.foundations=o.foundations; state.tableaus=o.tableaus;
+  state.select=null; render(); persist(); setStatus("Undid last move.");
 }
 
-/* ===== Layout & Fit ===== */
+function persist(){ try{ localStorage.setItem('twosol_v39_prefs', JSON.stringify({manualScale:state.manualScale, fitMode:state.fitMode})); }catch(e){} }
+function restorePrefs(){ try{ const s=localStorage.getItem('twosol_v39_prefs'); if(!s) return; const p=JSON.parse(s); state.manualScale=p.manualScale??1.0; state.fitMode=p.fitMode??true; }catch(e){} }
+
+/* ---------- Layout ---------- */
 function lockMainHeight(){
   const hdr = document.getElementById('hdr');
   const ftr = document.getElementById('ftr');
@@ -243,67 +364,46 @@ function lockMainHeight(){
   return h;
 }
 
-function autoFit(){
-  const main = document.getElementById('mainArea');
-  const found = document.getElementById('foundRow');
-  const row = document.getElementById('tabRow');
-
-  const mainH = main.clientHeight;
-  const avail = Math.max(120, mainH - found.offsetHeight - 8);
-
-  let maxN = 1;
-  for (let i=0;i<7;i++) maxN = Math.max(maxN, state.tableaus[i].length);
-
-  const baseStack = BASE_CARD_H + BASE_FAN*(maxN-1);
-  let target = avail / baseStack;  // exact fill
-  target = Math.max(MIN_SCALE, Math.min(MAX_SCALE, target));
-
-  let effective = target;
-  if (!state.fitMode){
-    effective = Math.min(target, state.manualScale);
-  }
-
-  const h = Math.round(BASE_CARD_H * effective);
-  const w = Math.round(BASE_CARD_W * effective);
-  const fan = Math.max(6, Math.round(BASE_FAN * effective));
-
-  const root = document.documentElement;
-  root.style.setProperty('--card-h', h+'px');
-  root.style.setProperty('--card-w', w+'px');
-  root.style.setProperty('--fan', fan+'px');
-
-  // Also set the row min-height to exactly fill the remainder
-  const stackPx = h + fan * Math.max(0, maxN-1);
-  row.style.minHeight = Math.round(stackPx+2) + 'px';
-}
-
 let rafId=null;
-function scheduleFit(){
+function scheduleRender(){
   if (rafId) cancelAnimationFrame(rafId);
-  rafId = requestAnimationFrame(()=>{
-    lockMainHeight();
-    requestAnimationFrame(autoFit);
-  });
+  rafId = requestAnimationFrame(()=>{ render(); });
 }
 
+['resize','orientationchange'].forEach(ev=>window.addEventListener(ev, scheduleRender));
+
+/* ---------- Controls ---------- */
 function initControls(){
   const slider = document.getElementById('scaleRange');
   const out = document.getElementById('scaleOut');
   const fit = document.getElementById('fitToggle');
-  if (slider){ slider.value = Math.round(state.manualScale*100); slider.oninput = slider.onchange = ()=>{ state.manualScale = Math.max(0.6, Math.min(1.2, (parseInt(slider.value,10)||100)/100)); out.textContent = Math.round(state.manualScale*100)+'%'; persist(); scheduleFit(); }; out.textContent = Math.round(state.manualScale*100)+'%'; }
-  if (fit){ fit.checked = !!state.fitMode; fit.onchange = ()=>{ state.fitMode = fit.checked; persist(); scheduleFit(); }; }
+  if (slider){ slider.value = Math.round(state.manualScale*100);
+    slider.oninput = slider.onchange = ()=>{
+      state.manualScale = Math.max(0.6, Math.min(1.2, (parseInt(slider.value,10)||100)/100));
+      out.textContent = Math.round(state.manualScale*100)+'%'; persist(); scheduleRender();
+    };
+    out.textContent = Math.round(state.manualScale*100)+'%';
+  }
+  if (fit){ fit.checked = !!state.fitMode;
+    fit.onchange = ()=>{ state.fitMode = fit.checked; persist(); scheduleRender(); };
+  }
+  qs('#newGameBtn').onclick = ()=>{ deal(); state.undo.length=0; state.select=null; scheduleRender(); setStatus("New deal."); };
+  qs('#undoBtn').onclick = ()=>undo();
+  qs('#helpBtn').onclick = ()=>alert('Tap a face‑up card in a column to select a run; tap a destination column to move the whole run (must be +1 or -1). Foundations build A→K (single cards). Stock deals to Waste; tap empty Stock to recycle Waste.');
 }
 
-['resize','orientationchange'].forEach(ev=>window.addEventListener(ev, scheduleFit));
+function checkWin(){ const total = state.foundations.reduce((a,f)=>a+f.length,0); if (total===52) setStatus("You win! 🎉"); }
+function setStatus(msg){ qs('#status').textContent = msg; }
+
+function qs(s){ return document.querySelector(s); }
+function qsAll(s){ return document.querySelectorAll(s); }
+function ce(tag, cls){ const el=document.createElement(tag); if (cls) el.className=cls; return el; }
 
 window.addEventListener('load', ()=>{
   restorePrefs();
   initControls();
-  qs('#newGameBtn').addEventListener('click', ()=>{ setup(); });
-  qs('#undoBtn').addEventListener('click', undo);
-  qs('#helpBtn').addEventListener('click', ()=>alert('Tap a face‑up card to auto‑move; build up or down by 1; Stock deals to Waste; recycle Waste onto empty Stock.'));
-
-  setup(); // creates a new game on first load
+  deal();
+  scheduleRender();
   if ('serviceWorker' in navigator){ navigator.serviceWorker.register('./service-worker.js'); }
 });
 
