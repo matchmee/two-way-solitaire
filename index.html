@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Two‑Way Solitaire</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Two‑Way Solitaire</h1>
+    <div class="buttons">
+      <button id="newGameBtn" title="Start a new game">New</button>
+      <button id="undoBtn" title="Undo last move">Undo</button>
+      <button id="helpBtn" title="How to play">?</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="row foundations-row" aria-label="Foundations">
+      <div class="pile foundation" data-pile="F0" aria-label="Foundation 1"></div>
+      <div class="pile foundation" data-pile="F1" aria-label="Foundation 2"></div>
+      <div class="pile foundation" data-pile="F2" aria-label="Foundation 3"></div>
+      <div class="pile foundation" data-pile="F3" aria-label="Foundation 4"></div>
+      <div class="spacer"></div>
+      <div class="stock-area">
+        <div class="pile stock" data-pile="STOCK" aria-label="Stock"></div>
+        <div class="pile waste" data-pile="WASTE" aria-label="Waste"></div>
+      </div>
+    </section>
+
+    <section class="row tableaus-row" aria-label="Tableaus">
+      <div class="pile tableau" data-pile="T0" aria-label="Tableau 1"></div>
+      <div class="pile tableau" data-pile="T1" aria-label="Tableau 2"></div>
+      <div class="pile tableau" data-pile="T2" aria-label="Tableau 3"></div>
+      <div class="pile tableau" data-pile="T3" aria-label="Tableau 4"></div>
+      <div class="pile tableau" data-pile="T4" aria-label="Tableau 5"></div>
+    </section>
+  </main>
+
+  <footer>
+    <div id="status">Tap a card, then tap a destination. Build up or down; change direction anytime.</div>
+  </footer>
+
+  <dialog id="helpDialog">
+    <h2>How to Play (Two‑Way / “Flip‑Style” Klondike)</h2>
+    <ul>
+      <li>Goal: move all cards to the four Foundations (A→K by suit).</li>
+      <li>On the five Tableaus you may build <strong>up or down</strong> (e.g., 7 on 6 or on 8). Direction can change any time.</li>
+      <li>Suits don’t matter on the Tableaus. Empty Tableau spaces accept any single card.</li>
+      <li>Move one card at a time. (No multi‑card stacks.)</li>
+      <li>Tap the Stock to deal one card to the Waste. Unlimited redeals (when Stock is empty, tap the empty Stock to recycle Waste).</li>
+      <li>Foundations are by suit only (A→K). You can tap‑move eligible cards onto a Foundation.</li>
+      <li>Offline capable: once loaded, you can play without internet.</li>
+    </ul>
+    <button id="closeHelp">Close</button>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
